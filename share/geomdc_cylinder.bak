@@ -1,0 +1,7 @@
+
+
+1 6.35      0.1      78.   0.  // the inner barrel part of the inner drift chamber
+4 3.58      2.77     78.   0.  // the air between the inner drift chamber and the outer beryllium pipe
+2 3.53      0.05     30.   0.  // the outer beryllium pipe
+3 3.23      0.3      30.   0.  // the colding helium gas between the beryllium pipes 
+2 3.15      0.08     30.   0.  // the inner beryllium pipe

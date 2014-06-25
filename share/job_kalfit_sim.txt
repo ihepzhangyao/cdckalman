@@ -1,0 +1,103 @@
+//--------------------------------------------------------------
+// Private Application Configuration options
+//--------------------------------------------------------------
+ApplicationMgr.DLLs += {"KalFitAlg"};
+ApplicationMgr.DLLs += { "RootHistCnv"};
+ApplicationMgr.DLLs += { "BesTimerSvc"};
+ApplicationMgr.DLLs += { "MagneticField"}; 
+ApplicationMgr.TopAlg += { "KalFitAlg" };
+ApplicationMgr.ExtSvc += { "MdcGeomSvc" };
+ApplicationMgr.ExtSvc += { "BesTimerSvc"};   
+ApplicationMgr.ExtSvc += { "MagneticFieldSvc"};
+//-----------------------------------------------------------
+// options for kalfit
+//    muls: multiple scattering 0:close 1: open
+//    loss: energy loss  0:close  1:open
+//    lr  : how to set lr ambig  0:independendtly 1:use lr from PR
+//    matrixg: the factor to use in matrix initialization
+//    debug: debug verbose 0:close  1--4: lower to maximum
+//    ntuple: control of ntuple using bitmap FEDCBA
+//            A:n101  B:n103  C:n102/n104  D:n105 
+//	      E:mctruth in n101	 F:error matrix in n101/n103
+//    activeonly: whether use active hits only	0:all  1:active hits only  	   
+//    matfile, cylfile: dir and name of data file currently used		       
+//    deltachi2_cutf, deltachi2_cuts: delta-chisq cut for filter and smoother
+//    pe_cut,pmu_cut,ppi_cut,pk_cut,pp_cut:upper momentum cut for filter 
+//    back: backward fitting 0:close 1:open
+//    i_back: mass hyp used in backward fitting <0: only for pion
+//    pt: lower pT cut for backward fitting
+//    tofflag : re-calculate the drift distance with tof correction 
+//    tof_hyp: mass hypothesis when calculate TOF
+//    resolution: wire resolution 0:double gaussian  1:single gaussian
+//    fstrag: factor of energy loss straggling for electron
+
+//KalFitAlg.Bznom = -10;
+KalFitAlg.dchisq_cut_inner = 10;   //layerid 0,1
+KalFitAlg.dchisq_cut_layid2 = 10;  //layerid 2
+KalFitAlg.dchisq_cut_layid3 = 10;  //layerid 3
+KalFitAlg.dchisq_cut_middle1 = 15; //layerid 4-11
+KalFitAlg.dchisq_cut_middle2 = 20; //layerid 12-20
+KalFitAlg.dchisq_cut_outer = 100;   //layerid 20-43
+//KalFitAlg.gain1 = 1.00;
+//KalFitAlg.gain2 = 1.00;
+//KalFitAlg.gain3 = 1.00;
+//KalFitAlg.gain4 = 1.00;
+//KalFitAlg.gain5 = 1.00;
+KalFitAlg.choice = 5;
+KalFitAlg.fitnocut = 6;
+KalFitAlg.inner_steps = 5;
+KalFitAlg.outer_steps = 10;
+KalFitAlg.numfcor = 1;
+//KalFitAlg.steplev = 2;
+// for calibration , set usage = 1
+KalFitAlg.usage = 0;
+// for calibration , set i_front = -1
+KalFitAlg.i_front = 1;
+// for pion hypothesis , so set lead = 2
+//KalFitAlg.lead = 2;
+KalFitAlg.numf = 20;
+KalFitAlg.muls = 1;
+KalFitAlg.loss = 1;
+KalFitAlg.lr = 1;
+//KalFitAlg.matrixg = 100.0;
+//KalFitAlg.debug_kft = 0;
+//KalFitAlg.debug = 0;
+KalFitAlg.ntuple = 0;
+//KalFitAlg.activeonly = 0;
+KalFitAlg.matfile = "$KALFITALGROOT/share/geomdc_material.dat";
+KalFitAlg.cylfile = "$KALFITALGROOT/share/geomdc_cylinder.dat";
+KalFitAlg.deltachi2_cutf = 10.0;
+KalFitAlg.deltachi2_cuts = 10.0;
+KalFitAlg.pt = 0.0;
+KalFitAlg.pe_cut = 400.0;
+KalFitAlg.pmu_cut = 400.0;
+KalFitAlg.ppi_cut = 400.0;
+KalFitAlg.pk_cut = 400.0;
+KalFitAlg.pp_cut = 400.0;
+KalFitAlg.back = 1;
+//for calibration , set i_back = -1
+KalFitAlg.i_back = 1;
+KalFitAlg.tofflag = 1;
+KalFitAlg.tof_hyp = 1;
+KalFitAlg.resolution = 1;
+KalFitAlg.fstrag = 0.9;
+KalFitAlg.drifttime_choice = 0;
+KalFitAlg.tprop = 1;
+KalFitAlg.wsag = 0;
+
+
+//--------------------------------------------------------------
+
+#include "$MDCCALIBFUNSVCROOT/share/job_MdcCalibFunSvc.txt" 
+
+
+//--------------------------------------------------------------
+// NTuples parameters
+//--------------------------------------------------------------
+//ApplicationMgr.HistogramPersistency = "ROOT";
+//NTupleSvc.Output = { "FILE104 DATAFILE='kalfit.root' OPT='NEW' TYP='ROOT'" };
+//==============================================================
+//
+// End of job options file
+//
+//##############################################################

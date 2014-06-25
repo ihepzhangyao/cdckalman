@@ -1,0 +1,8 @@
+
+     z         a         i        rho         x0
+
+[0] 4.70068  9.25082  51.3924  0.00085876  56513.8  // mdcgas ,Hegas&propane
+[1] 13.000   26.980  166.4    2.698       8.89253   // aluminium , the inner barrel of inner drift chamber 
+[2] 4.0      9.0122   63.6    1.848       35.276    // beryllium pipes
+[3] 2.0      4.0026   41.8    0.000179    528121.   // helium gas for colding between the two beryllium pipes
+[4] 7.3      14.60    35.5    0.001293    28516.1   // air
