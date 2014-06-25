@@ -1,0 +1,40 @@
+package KalFitAlg
+author  "Wang DaYong & Wang JiKe"
+
+branches cmt src KalFitAlg share 
+
+use BesPolicy BesPolicy-01-*
+use GaudiInterface GaudiInterface-* External
+use CERNLIB  CERNLIB-* External
+use MdcRawEvent  MdcRawEvent-* Mdc
+use BesCLHEP   BesCLHEP-* External
+use EventModel   EventModel-*  Event
+use EvTimeEvent	 EvTimeEvent-* Event
+use MdcTables    MdcTables-*  Mdc
+#use TrackUtil      TrackUtil-*      Reconstruction
+use ReconEvent ReconEvent-*  Event
+use McTruth   McTruth-*   Event
+use G4Svc     G4Svc-00-*    Simulation
+use G4Geo *   DetectorDescription
+use RootHistCnv v*
+use BesROOT BesROOT-* External
+use BesAIDA    *          External
+use MdcRecEvent  MdcRecEvent-* Mdc
+use MdcGeomSvc   MdcGeomSvc-*  Mdc
+use MdcCalibFunSvc MdcCalibFunSvc-* Mdc
+use MagneticField   MagneticField-*
+use PartPropSvc  *  
+use VertexFit    VertexFit-*   Analysis 
+
+
+include_dirs "$(KALFITALGROOT)"
+
+#Linker library
+apply_pattern component_library 
+library KalFitAlg  *.cxx  components/*.cxx  helix/*.cxx lpav/*.cxx coil/*.cxx
+
+# the macro -DYDEBUG if for debug use in KalFitTrack ...
+#macro_append KalFitAlg_cppflags "-DYDEBUG"
+
+#apply_pattern declare_runtime files="job_kalfit.txt geomdc_cylinder.dat geomdc_material.dat"
+
