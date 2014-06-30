@@ -155,7 +155,7 @@ double KalFitTrack::intersect_cylinder_back(double r) const
 	if(cosPhi < -1 || cosPhi > 1) return 0;
 
 	double dPhi = center().phi() + acos(cosPhi) - phi0();
-	//std::cout<<__FILE__<<"   "<<__LINE__<<" m_rad  "<<m_rad<<" l "<<l <<" cosPhi "<<cosPhi<<" center.phi "<<center().phi()<<" phi0 "<<phi0()<<std::endl;
+	if(debug_>0)std::cout<<__FILE__<<"   "<<__LINE__<<" m_rad  "<<m_rad<<" l "<<l <<" cosPhi "<<cosPhi<<" center.phi "<<center().phi()<<" phi0 "<<phi0()<<" dPhi "<<dPhi<<std::endl;
 
 	//if(dPhi < -M_PI) dPhi += 2 * M_PI;//yzhang delete TEMP
 	if(debug_>0)std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang delete intersect_cylinder_back dPhi over pi "<<std::endl;
@@ -1422,13 +1422,14 @@ double KalFitTrack::radius_numf(void) const {
 const HepPoint3D &
 KalFitTrack::pivot_numf(const HepPoint3D & newPivot) {
 
-        if (debug_ == 4) std::cout<<__FILE__<<"   "<<__LINE__<<" in pivot_numf "<<newPivot<<std::endl;
 	int nstep(1);
 	HepPoint3D  delta_x((newPivot-pivot()).x()/double(inner_steps_),
 			(newPivot-pivot()).y()/double(inner_steps_),
 			(newPivot-pivot()).z()/double(inner_steps_));
+	std::cout<<__FILE__<<"   "<<__LINE__<<" delta_x  "<<delta_x<<" pivot "<<pivot()<<" newPivot "<<newPivot<<std::endl;
 	int i = 1;
 
+        if (debug_ == 4) std::cout<<__FILE__<<"   "<<__LINE__<<" in pivot_numf "<<newPivot<<" inner_steps_ "<<inner_steps_<<std::endl;
 	while (i <= inner_steps_) {
 		HepPoint3D nextPivot(pivot()+delta_x);
 		double xnp(nextPivot.x()), ynp(nextPivot.y()), znp(nextPivot.z());  
@@ -1446,8 +1447,8 @@ KalFitTrack::pivot_numf(const HepPoint3D & newPivot) {
 		else
 			m_rad = radius();
 		double rdr = dr + m_rad;
-		//double phi = fmod(phi0 + M_PI4, M_PI2);
-		double phi = fmod(phi0 + M_PI4*2., M_PI2*2.);//yzhang 2014-06-18 
+		double phi = fmod(phi0 + M_PI4, M_PI2);
+		//double phi = fmod(phi0 + M_PI4*2., M_PI2*2.);//yzhang 2014-06-18 
 		double csf0 = cos(phi);
 		double snf0 = (1. - csf0) * (1. + csf0);
 		snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
@@ -2043,9 +2044,9 @@ double KalFitTrack::update_hits(KalFitHitMdc & HitMdc, int inext, Hep3Vector& me
 	}
 	if(debug_ == 4) {
 	  std::cout<<" hit ("<<layerid<<","<< HitMdc.wire().localId()
-	    <<") in update_hits estime "<<estim<<" drifttime "<<drifttime
-	    <<"ns ddl="<<ddl/10.<<" erddl "<<erddl/10. <<" ddr="<<ddr/10.<<" erddr "<<erddr/10. <<" cm "
-	    <<" lr= " << lr <<" entrangle "<<entrangle<<" fi "<<fiTemp<<std::endl;
+	    <<") in update_hits dd_estimated "<<estim<<" ddl="<<ddl/10.<<" erddl "
+	    <<erddl/10. <<" ddr="<<ddr/10.<<" erddr "<<erddr/10. <<" cm "<<" drifttime "<<drifttime
+	    <<"ns lr= " << lr <<" entrangle "<<entrangle<<" fi "<<fiTemp<<std::endl;
 	  //std::cout<<" in update_hits estime is  "<<estim<<std::endl;
 	  //std::cout<<"drifttime in update_hits() for ananlysis is  "<<drifttime<< " ns "<<std::endl;
 	  //std::cout<<"ddl in update_hits() for ananlysis is  "<<ddl/10.<<" cm "<<std::endl;
@@ -3283,74 +3284,5 @@ double KalFitTrack::chi2_next(Helix& H, KalFitHitMdc & HitMdc, int csmflag){
     H.a(aNewL); H.Ea(eaNewL);
   }
   return ((dchi2R < dchi2L) ? dchi2R : dchi2L);
-}
-
-
-double KalFitTrack::getSigma(int layerId, double driftDist ) const {
-  double sigma1,sigma2,f;
-  driftDist *= 10;//mm
-  if(layerId<8){
-    if(driftDist<0.5){
-      sigma1=0.112784;      sigma2=0.229274;      f=0.666;
-    }else if(driftDist<1.){
-      sigma1=0.103123;      sigma2=0.269797;      f=0.934;
-    }else if(driftDist<1.5){
-      sigma1=0.08276;        sigma2=0.17493;      f=0.89;
-    }else if(driftDist<2.){
-      sigma1=0.070109;      sigma2=0.149859;      f=0.89;
-    }else if(driftDist<2.5){
-      sigma1=0.064453;      sigma2=0.130149;      f=0.886;
-    }else if(driftDist<3.){
-      sigma1=0.062383;      sigma2=0.138806;      f=0.942;
-    }else if(driftDist<3.5){
-      sigma1=0.061873;      sigma2=0.145696;      f=0.946;
-    }else if(driftDist<4.){
-      sigma1=0.061236;      sigma2=0.119584;      f=0.891;
-    }else if(driftDist<4.5){
-      sigma1=0.066292;      sigma2=0.148426;      f=0.917;
-    }else if(driftDist<5.){
-      sigma1=0.078074;      sigma2=0.188148;      f=0.911;
-    }else if(driftDist<5.5){
-      sigma1=0.088657;      sigma2=0.27548;      f=0.838;
-    }else{
-      sigma1=0.093089;      sigma2=0.115556;      f=0.367;
-    }
-  }else{
-    if(driftDist<0.5){
-      sigma1=0.112433;      sigma2=0.327548;      f=0.645;
-    }else if(driftDist<1.){
-      sigma1=0.096703;      sigma2=0.305206;      f=0.897;
-    }else if(driftDist<1.5){
-      sigma1=0.082518;      sigma2=0.248913;      f= 0.934;
-    }else if(driftDist<2.){
-      sigma1=0.072501;      sigma2=0.153868;      f= 0.899;
-    }else if(driftDist<2.5){
-      sigma1= 0.065535;     sigma2=0.14246;       f=0.914;
-    }else if(driftDist<3.){
-      sigma1=0.060497;      sigma2=0.126489;      f=0.918;
-    }else if(driftDist<3.5){
-      sigma1=0.057643;      sigma2= 0.112927;     f=0.892;
-    }else if(driftDist<4.){
-      sigma1=0.055266;      sigma2=0.094833;      f=0.887;
-    }else if(driftDist<4.5){
-      sigma1=0.056263;      sigma2=0.124419;      f= 0.932;
-    }else if(driftDist<5.){
-      sigma1=0.056599;      sigma2=0.124248;      f=0.923;
-    }else if(driftDist<5.5){
-      sigma1= 0.061377;     sigma2=0.146147;      f=0.964;
-    }else if(driftDist<6.){
-      sigma1=0.063978;      sigma2=0.150591;      f=0.942;
-    }else if(driftDist<6.5){
-      sigma1=0.072951;      sigma2=0.15685;       f=0.913;
-    }else if(driftDist<7.){
-      sigma1=0.085438;      sigma2=0.255109;      f=0.931;
-    }else if(driftDist<7.5){
-      sigma1=0.101635;      sigma2=0.315529;      f=0.878;
-    }else{
-      sigma1=0.149529;      sigma2=0.374697;      f=0.89;
-    }
-  }
-  double sigmax = sqrt(f*sigma1*sigma1+(1 - f)*sigma2*sigma2)*0.1;
-  return sigmax;//cm
 }
 

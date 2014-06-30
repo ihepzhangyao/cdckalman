@@ -28,8 +28,7 @@ void KalFitElement::updateTrack(KalFitTrack& track, int index)
   HepPoint3D x;
   double path = intersect(track, x);
 
-  //cout<<__FILE__<<" "<<__LINE__<<" in updateTrack: path= "<<path<<" intersect x "<<x<<endl;
-  //cout<<__FILE__<<" "<<__LINE__<<" in updateTrack path= "<<path<<" intersect x "<<x<<" change pivot to pivot_numf x"<<endl;
+  cout<<__FILE__<<" "<<__LINE__<<" in updateTrack path= "<<path<<" intersect x "<<x<<" change pivot to pivot_numf x"<<endl;
   
   if(path > 0){
     // move pivot
@@ -62,7 +61,7 @@ void KalFitElement::updateTrackBack(KalFitTrack& track, int index)
   HepPoint3D x;
   double path = intersectBack(track, x);
 
-  //cout<<__FILE__<<" "<<__LINE__<<" in updateTrackBack path= "<<path<<" intersect x "<<x<<" change pivot to x"<<endl;
+  cout<<__FILE__<<" "<<__LINE__<<" in updateTrackBack path= "<<path<<" intersect x "<<x<<" change pivot to x"<<endl;
   
   if(path > 0){
     // move pivot
@@ -73,8 +72,8 @@ void KalFitElement::updateTrackBack(KalFitTrack& track, int index)
     //std::cout<<" KalFitTrack::loss_: "<<loss_<<std::endl;
     
     //yzhang change TEMP 2014-05-02 
-    //track.pivot_numf(x);
-    track.pivot(x,true);//yzhang phi not +2pi
+    track.pivot_numf(x);
+    //track.pivot(x,true);//yzhang phi not +2pi
   
     //std::cout<<"KalFitElement: track helix2= "<<track.a()<<std::endl;
   

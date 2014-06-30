@@ -124,6 +124,7 @@ class Helix {
 
     /// sets pivot position.
     const HepPoint3D & pivot(const HepPoint3D & newPivot, bool turnOverPi=false);
+    const HepPoint3D & pivotByFltLen(double fltLenDiff);
 
     /// sets helix pivot position, parameters, and error matrix.
     void set(const HepPoint3D & pivot,

@@ -104,9 +104,6 @@ Helix::Helix(const HepPoint3D & position,
   m_alpha = 10000. / 2.99792458 / m_bField;
   
   m_a[0] = 0.;
-  //yzhang change for multi-turn helix 2014-05-03 
-    //m_a[1] = fmod(atan2(- momentum.x(), momentum.y())
-		  //+ M_PI4*2, M_PI2*2);
     m_a[1] = fmod(atan2(- momentum.x(), momentum.y())
 		  + M_PI4, M_PI2);
     m_a[3] = 0.;
@@ -308,10 +305,10 @@ Helix::momentum(double phi,
   return HepLorentzVector(px, py, pz, E);
 }
 
-
 const HepPoint3D &
 Helix::pivot(const HepPoint3D & newPivot, bool turnOverPi) {
 
+  bool debug = false;
     //std::cout<<" in Helix::pivot:"<<std::endl;
     //std::cout<<" m_alpha: "<<m_alpha<<std::endl;
     
@@ -324,9 +321,8 @@ Helix::pivot(const HepPoint3D & newPivot, bool turnOverPi) {
     double rdr = dr + m_r;
     //yzhang change for mulit-turn helix
     //double phi = fmod(phi0 + M_PI4*2, M_PI2*2);//2014-05-03 
-    //std::cout<<__FILE__<<"   "<<__LINE__<<" phi0  "<<phi0<<std::endl;
     double phi = fmod(phi0 + M_PI4, M_PI2);
-    //std::cout<<__FILE__<<"   "<<__LINE__<<" phi0 mod 2pi phi "<<phi<<std::endl;
+    if(debug)std::cout<<__FILE__<<"   "<<__LINE__<<" phi0 "<<phi0<<" phi0 mod 2pi phi "<<phi<<std::endl;
     double csf0 = cos(phi);
     double snf0 = (1. - csf0) * (1. + csf0);
     snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
@@ -354,7 +350,6 @@ Helix::pivot(const HepPoint3D & newPivot, bool turnOverPi) {
       phi = 0.0;
     }
     double phid ;
-    //std::cout<<__FILE__<<"   "<<__LINE__<<" phi calc by center "<<phi<<std::endl;
     //if(turnOverPi){
       //std::cout<<__FILE__<<"   "<<__LINE__<<" turnOverPi phid "<<phid<<std::endl;
       //phid = phi-phi0;
@@ -362,10 +357,10 @@ Helix::pivot(const HepPoint3D & newPivot, bool turnOverPi) {
       //yzhang change for multi-turn helix 2014-05-03
       //phid = fmod(phi - phi0 + M_PI8, M_PI2*2);
       phid = fmod(phi - phi0 + M_PI8, M_PI2);
-      //std::cout<<__FILE__<<"   "<<__LINE__<<" phid mod 2pi"<<phid<<" phi - phi0 "<<phi - phi0<<std::endl;
+    if(debug)std::cout<<__FILE__<<"   "<<__LINE__<<" phi calc by center "<<phi<<" phid "<<phi-phi0<<" phid mod2pi "<<phid<<std::endl;
       if(phid > M_PI) {
 	phid = phid - M_PI2;
-	//std::cout<<__FILE__<<"   "<<__LINE__<<" phid "<<phid<<" >PI - 2pi  "<<std::endl;
+	if(debug) std::cout<<__FILE__<<"   "<<__LINE__<<" phid "<<phid<<" >PI - 2pi  "<<std::endl;
       }
     //}
     //if(turnOverPi && phid < 0){ 
@@ -379,9 +374,9 @@ Helix::pivot(const HepPoint3D & newPivot, bool turnOverPi) {
       * csf
       + (m_pivot.y() + dr * snf0 + m_r * (snf0 - snf) - newPivot.y()) * snf;
     double dzp = m_pivot.z() + dz - m_r * tanl * phid - newPivot.z();
-    //std::cout<<__FILE__<<"   "<<__LINE__<<" dzp  "<<dzp <<" pivot.z "<<m_pivot.z()<< " dz "<<dz <<" m_r "<<m_r<<" tanl "<<tanl <<" phid "<<phid <<" newPivot.z "<<newPivot.z()<<std::endl;
+    if(debug)std::cout<<__FILE__<<"   "<<__LINE__<<" dzp  "<<dzp <<" pivot.z "<<m_pivot.z()<< " dz "<<dz <<" m_r "<<m_r<<" tanl "<<tanl <<" phid "<<phid <<" newPivot.z "<<newPivot.z()<<std::endl;
 
-    //std::cout<<"KalFitHelix rdr "<<rdr<<" phi "<< phi <<" xc "<<xc<<" yc  "<<yc<<" phid "<<phid<<" drp "<<drp <<" dzp "<<dzp<<std::endl;
+    if(debug)std::cout<<"KalFitHelix rdr "<<rdr<<" phi "<< phi <<" xc "<<xc<<" yc  "<<yc<<" phid "<<phid<<" drp "<<drp <<" dzp "<<dzp<<std::endl;
     HepVector ap(5);
     ap[0] = drp;
     //yzhang change for multi-turn helix 2014-05-03
@@ -476,6 +471,7 @@ Helix::updateCache(void) {
 
 HepMatrix
 Helix::delApDelA(const HepVector & ap, bool turnOverPi) const {
+  bool debug = false;
   //
   //   Calculate Jacobian (@ap/@a)
   //   Vector ap is new helix parameters and a is old helix parameters. 
@@ -513,10 +509,10 @@ Helix::delApDelA(const HepVector & ap, bool turnOverPi) const {
     //std::cout<<__FILE__<<"   "<<__LINE__<<"  phid "<<phid<<" > pi ,- 2pi"<<std::endl;
     phid = phid - M_PI2;
   }
-  if(turnOverPi && phid < 0){ 
-    //std::cout<<__FILE__<<"   "<<__LINE__<<"  phid "<<phid<<" > pi ,+ 2pi"<<std::endl;
-    phid += M_PI2;
-  }//yzhang add 2014-06-19 
+  //if(turnOverPi && phid < 0){ 
+  //  if(debug)std::cout<<__FILE__<<"   "<<__LINE__<<" delApDelA phid "<<phid<<" > pi ,+ 2pi"<<std::endl;
+  //  phid += M_PI2;
+  //}//yzhang add 2014-06-19 
 
   dApDA[0][0]  =  csfd;
   dApDA[0][1]  =  rdr*snfd;
@@ -838,5 +834,63 @@ Helix::ignoreErrorMatrix(void) {
   m_Ea *= 0.;
 }
 
+const HepPoint3D &
+Helix::pivotByFltLen(double fltLenDiff) {
+
+  bool debug = true;
+  if(debug)std::cout<<__FILE__<<" "<<__LINE__<<" in Helix::pivot:"<<std::endl;
+  //std::cout<<" m_alpha: "<<m_alpha<<std::endl;
+
+  const double & dr    = m_ac[0];
+  const double & phi0  = m_ac[1];
+  const double & kappa = m_ac[2];
+  const double & dz    = m_ac[3];
+  const double & tanl  = m_ac[4];
+
+  double omega = -1. * kappa / m_alpha;//alpha = 33.567 * Bz
+  double phid = omega*fltLenDiff;
+  //std::cout<<__FILE__<<"   "<<__LINE__<<" omega  "<<omega<<" kappa "<<kappa <<" m_alpha "<<m_alpha<<" fltLenDiff "<<fltLenDiff<<" phid "<<phid<<std::endl;
+  double phi = phi0 + phid;
+  double csf0 = cos(phi0);
+  double snf0 = sin(phi0);
+  double csf = cos(phi);
+  double snf = sin(phi);
+  HepPoint3D newPivot;
+
+  newPivot.setX(m_pivot.x() + dr * csf0 + m_r * (csf0 - csf));
+  newPivot.setY(m_pivot.y() + dr * snf0 + m_r * (snf0 - snf));
+  newPivot.setZ(m_pivot.z() + dz - m_r * tanl * phid);
+
+  //double drp_test = (m_pivot.x() + dr * csf0 + m_r * (csf0 - csf) - newPivot.x()) * csf
+    + (m_pivot.y() + dr * snf0 + m_r * (snf0 - snf) - newPivot.y()) * snf;
+  //double dzp_test = m_pivot.z() + dz - m_r * tanl * phid - newPivot.z();
+
+  double drp = newPivot.perp();
+  double dzp = newPivot.z();
+  //if(debug)std::cout<<__FILE__<<"   "<<__LINE__<<" drp_test  "<<drp_test<<" drp "<<drp<<std::endl;
+  //if(debug)std::cout<<__FILE__<<"   "<<__LINE__<<" dzp_test  "<<dzp_test<<" dzp "<<dzp<<std::endl;
+
+  if(debug)std::cout<<__FILE__<<"   "<<__LINE__<<" phi "<<phi<<" phi0 "<<phi0 <<" phid "<<phid<< " fltLenDiff "<<fltLenDiff<<" dzp  "<<dzp <<" pivot.z "<<m_pivot.z()<< " dz "<<dz <<" m_r "<<m_r<<" tanl "<<tanl <<" phid "<<phid <<" newPivot.z "<<newPivot.z()<<std::endl;
+
+
+  HepVector ap(5);
+  ap[0] = 0;
+  //yzhang change for multi-turn helix 2014-05-03
+  //ap[1] = fmod(phi + M_PI4*2, M_PI2*2);
+  ap[1] = fmod(phi + M_PI4, M_PI2);
+  ap[2] = kappa;
+  ap[3] = 0;
+  ap[4] = tanl;
+
+  //    if (m_matrixValid) m_Ea.assign(delApDelA(ap) * m_Ea * delApDelA(ap).T());
+  if (m_matrixValid) m_Ea = m_Ea.similarity(delApDelA(ap));//yzhang 2014-06-19 
+
+  m_a = ap;
+  m_pivot = newPivot;
+
+  //...Are these needed?...iw...
+  updateCache();
+  return m_pivot;
+}
 
 }  // end of namespace KalmanFit

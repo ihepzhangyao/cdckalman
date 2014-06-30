@@ -248,9 +248,6 @@ public:
 	/// Estimation of the radius in a given mag field
 	double radius_numf(void) const;
 
-	//temporily for wire resolution, use service in future
-	double getSigma(int layerId, double driftDist ) const;
-
 	//  call from calibration service 
 	double  getSigma(KalFitHitMdc& hitmdc, double tanlam, int lr, double dist) const;
 	double  getDriftDist(KalFitHitMdc& hitmdc, double drifttime, int lr) const;

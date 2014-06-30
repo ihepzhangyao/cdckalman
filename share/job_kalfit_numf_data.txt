@@ -32,12 +32,12 @@ ApplicationMgr.ExtSvc += { "MagneticFieldSvc"};
 //    fstrag: factor of energy loss straggling for electron
 
 //KalFitAlg.Bznom = -10;
-KalFitAlg.dchi2cut_inner = 10;   //layerid 0,1
-KalFitAlg.dchi2cut_layid2 = 10;  //layerid 2
-KalFitAlg.dchi2cut_layid3 = 10;  //layerid 3
-KalFitAlg.dchi2cut_mid1 = 15; //layerid 4-11
-KalFitAlg.dchi2cut_mid2 = 20; //layerid 12-20
-KalFitAlg.dchi2cut_outer = 100;   //layerid 20-43
+//KalFitAlg.dchi2cut_inner = 10;   //layerid 0,1
+//KalFitAlg.dchi2cut_layid2 = 10;  //layerid 2
+//KalFitAlg.dchi2cut_layid3 = 10;  //layerid 3
+//KalFitAlg.dchi2cut_mid1 = 15; //layerid 4-11
+//KalFitAlg.dchi2cut_mid2 = 20; //layerid 12-20
+//KalFitAlg.dchi2cut_outer = 100;   //layerid 20-43
 //KalFitAlg.gain1 = 1.00;
 //KalFitAlg.gain2 = 1.00;
 //KalFitAlg.gain3 = 1.00;
