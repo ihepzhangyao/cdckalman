@@ -837,7 +837,7 @@ Helix::ignoreErrorMatrix(void) {
 const HepPoint3D &
 Helix::pivotByFltLen(double fltLenDiff) {
 
-  bool debug = true;
+  bool debug = false;
   if(debug)std::cout<<__FILE__<<" "<<__LINE__<<" in Helix::pivot:"<<std::endl;
   //std::cout<<" m_alpha: "<<m_alpha<<std::endl;
 

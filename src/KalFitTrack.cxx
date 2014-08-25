@@ -21,7 +21,9 @@
 //#include "KalFitAlg/KalFitHistItem.h"
 
 extern NTuple::Tuple* m_ntTest;  // test drift dist in Kalman
-extern NTuple::Item<double> m_ddRec,m_ddKal,m_ddLayer,m_fiRec,m_fiKal,m_ddFiTerm,m_ddFltlen,m_ddWire,m_ddMass,m_ddTruth,m_ddFltlenKal;
+extern NTuple::Item<double> m_ddRec,m_ddKal,m_ddLayer,m_fiRec,m_fiKal,m_ddFiTerm,m_ddFltLenTerm,m_ddFltlen,m_ddWire,m_ddMass,m_ddTruth,m_ddFltlenKal,m_dchi2R,m_dchi2L,m_dchi2min,m_chi2Sum,m_chi2Add,m_dp,m_lastdp,m_pCurrent,m_pTruthCurrent;
+extern NTuple::Item<long> m_iTurn,m_iFit,m_iKeep;
+
 
 using namespace ROOT::Math;
 
@@ -70,10 +72,10 @@ double KalFitTrack::mdcGasRadlen_ = 0.;
 
 
 const double KalFitTrack::MASS[NMASS] = { 0.000510999,
-	0.105658,
-	0.139568,
-	0.493677,
-	0.938272 };
+  0.105658,
+  0.139568,
+  0.493677,
+  0.938272 };
 const double
 M_PI2 = 2. * M_PI;
 
@@ -87,601 +89,601 @@ M_PI8 = 8. * M_PI;
 
 // constructor
 KalFitTrack::KalFitTrack(const HepPoint3D& pivot,
-		const HepVector& a,
-		const HepSymMatrix& Ea,
-		unsigned int m, double chisq, unsigned int nhits)
+    const HepVector& a,
+    const HepSymMatrix& Ea,
+    unsigned int m, double chisq, unsigned int nhits)
 : Helix(pivot, a, Ea), type_(0), insist_(0), chiSq_(0),
-	nchits_(0), nster_(0), ncath_(0),
-	ndf_back_(0), chiSq_back_(0), pathip_(0), 
-	path_rd_(0), path_ab_(0), tof_(0), dchi2_max_(0), r_max_(0),
-	tof_kaon_(0), tof_proton_(0), pat1_(0), pat2_(0), layer_prec_(0),
-	trasan_id_(0), nhit_r_(0), nhit_z_(0),pathSM_(0),tof2_(0)
+  nchits_(0), nster_(0), ncath_(0),
+  ndf_back_(0), chiSq_back_(0), pathip_(0), 
+  path_rd_(0), path_ab_(0), tof_(0), dchi2_max_(0), r_max_(0),
+  tof_kaon_(0), tof_proton_(0), pat1_(0), pat2_(0), layer_prec_(0),
+  trasan_id_(0), nhit_r_(0), nhit_z_(0),pathSM_(0),tof2_(0)
 {
-	memset(PathL_, 0, sizeof(PathL_));
-	l_mass_ = m;
-	if (m < NMASS) mass_ = MASS[m];
-	else mass_ = MASS[2];
-	r0_ = fabs(center().perp() - fabs(radius()));
-	//bFieldZ(Bznom_);
-	Bznom_=bFieldZ(); // 2012-09-13 wangll
-	update_last();
+  memset(PathL_, 0, sizeof(PathL_));
+  l_mass_ = m;
+  if (m < NMASS) mass_ = MASS[m];
+  else mass_ = MASS[2];
+  r0_ = fabs(center().perp() - fabs(radius()));
+  //bFieldZ(Bznom_);
+  Bznom_=bFieldZ(); // 2012-09-13 wangll
+  update_last();
 }
 
 // destructor
 KalFitTrack::~KalFitTrack(void)
 {
-	// delete all objects
+  // delete all objects
 
 }
 
 void KalFitTrack::update_last(void)
 {
-	pivot_last_ = pivot();
-	a_last_ = a();
-	Ea_last_ = Ea();
+  pivot_last_ = pivot();
+  a_last_ = a();
+  Ea_last_ = Ea();
 }
 
 void KalFitTrack::update_forMdc(void)
 {
-	pivot_forMdc_ = pivot();
-	a_forMdc_ = a();
-	Ea_forMdc_ = Ea();
+  pivot_forMdc_ = pivot();
+  a_forMdc_ = a();
+  Ea_forMdc_ = Ea();
 }
 
 double KalFitTrack::intersect_cylinder(double r) const
 {
-	double m_rad = radius();
-	double l = center().perp();
+  double m_rad = radius();
+  double l = center().perp();
 
-	double cosPhi = (m_rad * m_rad + l * l  - r * r) / (2 * m_rad * l);
+  double cosPhi = (m_rad * m_rad + l * l  - r * r) / (2 * m_rad * l);
 
-	if(cosPhi < -1 || cosPhi > 1) return 0;
+  if(cosPhi < -1 || cosPhi > 1) return 0;
 
-	double dPhi = center().phi() - acos(cosPhi) - phi0();
+  double dPhi = center().phi() - acos(cosPhi) - phi0();
 
-	if(dPhi < -M_PI) dPhi += 2 * M_PI;
+  if(dPhi < -M_PI) dPhi += 2 * M_PI;
 
-	return dPhi;
+  return dPhi;
 }
 
 //yzhang add for CDC 2014-05-02 
 double KalFitTrack::intersect_cylinder_back(double r) const
 {
-	double m_rad = radius();
-	double l = center().perp();
+  double m_rad = radius();
+  double l = center().perp();
 
-	double cosPhi = (m_rad * m_rad + l * l  - r * r) / (2 * m_rad * l);
+  double cosPhi = (m_rad * m_rad + l * l  - r * r) / (2 * m_rad * l);
 
-	if(cosPhi < -1 || cosPhi > 1) return 0;
+  if(cosPhi < -1 || cosPhi > 1) return 0;
 
-	double dPhi = center().phi() + acos(cosPhi) - phi0();
-	if(debug_>0)std::cout<<__FILE__<<"   "<<__LINE__<<" m_rad  "<<m_rad<<" l "<<l <<" cosPhi "<<cosPhi<<" center.phi "<<center().phi()<<" phi0 "<<phi0()<<" dPhi "<<dPhi<<std::endl;
+  double dPhi = center().phi() + acos(cosPhi) - phi0();
+  if(debug_>0)std::cout<<__FILE__<<"   "<<__LINE__<<" m_rad  "<<m_rad<<" l "<<l <<" cosPhi "<<cosPhi<<" center.phi "<<center().phi()<<" phi0 "<<phi0()<<" dPhi "<<dPhi<<std::endl;
 
-	//if(dPhi < -M_PI) dPhi += 2 * M_PI;//yzhang delete TEMP
-	if(debug_>0)std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang delete intersect_cylinder_back dPhi over pi "<<std::endl;
+  //if(dPhi < -M_PI) dPhi += 2 * M_PI;//yzhang delete TEMP
+  if(debug_>0)std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang delete intersect_cylinder_back dPhi over pi "<<std::endl;
 
-	return dPhi;
+  return dPhi;
 }
 
 double KalFitTrack::intersect_zx_plane(const HepTransform3D& plane,
-		double y) const
+    double y) const
 {
-	HepPoint3D xc = plane * center();
-	double r = radius();
-	double d = r * r - (y - xc.y()) * (y - xc.y());
-	if(d < 0) return 0;
+  HepPoint3D xc = plane * center();
+  double r = radius();
+  double d = r * r - (y - xc.y()) * (y - xc.y());
+  if(d < 0) return 0;
 
-	double xx = xc.x();
-	if(xx > 0) xx -= sqrt(d);
-	else xx += sqrt(d);
+  double xx = xc.x();
+  if(xx > 0) xx -= sqrt(d);
+  else xx += sqrt(d);
 
-	double l = (plane.inverse() *
-			HepPoint3D(xx, y, 0)).perp();
+  double l = (plane.inverse() *
+      HepPoint3D(xx, y, 0)).perp();
 
-	return intersect_cylinder(l);
+  return intersect_cylinder(l);
 }
 
 double KalFitTrack::intersect_yz_plane(const HepTransform3D& plane,
-		double x) const
+    double x) const
 {
-	HepPoint3D xc = plane * center();
-	double r = radius();
-	double d = r * r - (x - xc.x()) * (x - xc.x());
-	if(d < 0) return 0;
+  HepPoint3D xc = plane * center();
+  double r = radius();
+  double d = r * r - (x - xc.x()) * (x - xc.x());
+  if(d < 0) return 0;
 
-	double yy = xc.y();
-	if(yy > 0) yy -= sqrt(d);
-	else yy += sqrt(d);
+  double yy = xc.y();
+  if(yy > 0) yy -= sqrt(d);
+  else yy += sqrt(d);
 
-	double l = (plane.inverse() *
-			HepPoint3D(x, yy, 0)).perp();
+  double l = (plane.inverse() *
+      HepPoint3D(x, yy, 0)).perp();
 
-	return intersect_cylinder(l);
+  return intersect_cylinder(l);
 }
 
 double KalFitTrack::intersect_xy_plane(double z) const
 {
-	if (tanl() != 0 && radius() != 0)
-		return (pivot().z() + dz() - z) / (radius() * tanl());
-	else return 0;
+  if (tanl() != 0 && radius() != 0)
+    return (pivot().z() + dz() - z) / (radius() * tanl());
+  else return 0;
 }
 
 void KalFitTrack::ms(double path,
-		const KalFitMaterial& material, int index)
+    const KalFitMaterial& material, int index)
 {
-	HepSymMatrix ea = Ea();
-	//cout<<"ms():path  "<<path<<endl;
-	//cout<<"ms():ea before: "<<ea<<endl;
-	double k = kappa();
-	double t = tanl();
-	double t2 = t * t;
-	double pt2 = 1 + t2;
-	double k2 = k * k;
+  HepSymMatrix ea = Ea();
+  //cout<<"ms():path  "<<path<<endl;
+  //cout<<"ms():ea before: "<<ea<<endl;
+  double k = kappa();
+  double t = tanl();
+  double t2 = t * t;
+  double pt2 = 1 + t2;
+  double k2 = k * k;
 
-	double pmag = 1 / fabs(k) * sqrt(pt2);
-	double dth = material.mcs_angle(mass_, path, pmag);
-	double dth2 = dth * dth;
-	double pt2dth2 = pt2 * dth2;
+  double pmag = 1 / fabs(k) * sqrt(pt2);
+  double dth = material.mcs_angle(mass_, path, pmag);
+  double dth2 = dth * dth;
+  double pt2dth2 = pt2 * dth2;
 
-	ea[1][1] += pt2dth2;
-	ea[2][2] += k2 * t2 * dth2;
-	ea[2][4] += k * t * pt2dth2;
-	ea[4][4] += pt2 * pt2dth2;
+  ea[1][1] += pt2dth2;
+  ea[2][2] += k2 * t2 * dth2;
+  ea[2][4] += k * t * pt2dth2;
+  ea[4][4] += pt2 * pt2dth2;
 
-	ea[3][3] += dth2 * path * path /3 / (1 + t2);
-	ea[3][4] += dth2 * path/2 * sqrt(1 + t2);
-	ea[3][2] += dth2 * t / sqrt(1 + t2) * k * path/2;
-	ea[0][0] += dth2 * path * path/3;
-	ea[0][1] += dth2 * sqrt(1 + t2) * path/2;
+  ea[3][3] += dth2 * path * path /3 / (1 + t2);
+  ea[3][4] += dth2 * path/2 * sqrt(1 + t2);
+  ea[3][2] += dth2 * t / sqrt(1 + t2) * k * path/2;
+  ea[0][0] += dth2 * path * path/3;
+  ea[0][1] += dth2 * sqrt(1 + t2) * path/2;
 
-	Ea(ea);
-	//cout<<"ms():ms angle in this: "<<dth<<endl;  
-	//cout<<"ms():ea after: "<<Ea()<<endl;
-	if (index < 0) {
-		double x0 = material.X0();
-		if (x0) path_rd_ += path/x0;
-	}
+  Ea(ea);
+  //cout<<"ms():ms angle in this: "<<dth<<endl;  
+  //cout<<"ms():ea after: "<<Ea()<<endl;
+  if (index < 0) {
+    double x0 = material.X0();
+    if (x0) path_rd_ += path/x0;
+  }
 }
 
 void KalFitTrack::msgasmdc(double path, int index)
 {
-	double k = kappa();
-	double t = tanl();
-	double t2 = t * t;
-	double k2 = k * k;
+  double k = kappa();
+  double t = tanl();
+  double t2 = t * t;
+  double k2 = k * k;
 
-	double pmag = ( 1 / fabs(k) ) * sqrt(1 + t2);
-	double psq = pmag*pmag;
-	/*
-	   double Zprims = 3/2*0.076 + 0.580/9.79*4.99*(4.99+1) +
-	   0.041/183.85*74*(74+1) + 0.302/26.98 * 13 * (13+1);
-	   double chicc = 0.00039612 * sqrt(Zprims * 0.001168);
-	   double dth = 2.557 * chicc * sqrt(path * (mass_*mass_ + psq)) / psq;
-	 */
+  double pmag = ( 1 / fabs(k) ) * sqrt(1 + t2);
+  double psq = pmag*pmag;
+  /*
+     double Zprims = 3/2*0.076 + 0.580/9.79*4.99*(4.99+1) +
+     0.041/183.85*74*(74+1) + 0.302/26.98 * 13 * (13+1);
+     double chicc = 0.00039612 * sqrt(Zprims * 0.001168);
+     double dth = 2.557 * chicc * sqrt(path * (mass_*mass_ + psq)) / psq;
+   */
 
-	//std::cout<<__FILE__<<" "<<__LINE__<<" mdcGasRadlen: "<<mdcGasRadlen_<<std::endl;
-	double pathx = path/mdcGasRadlen_;
-	double dth =  0.0136* sqrt(pathx * (mass_*mass_ + psq))/psq 
-		*(1 + 0.038 * log(pathx));;
-	HepSymMatrix ea = Ea();
+  //std::cout<<__FILE__<<" "<<__LINE__<<" mdcGasRadlen: "<<mdcGasRadlen_<<std::endl;
+  double pathx = path/mdcGasRadlen_;
+  double dth =  0.0136* sqrt(pathx * (mass_*mass_ + psq))/psq 
+    *(1 + 0.038 * log(pathx));;
+  HepSymMatrix ea = Ea();
 #ifdef YDEBUG
-	cout<<"msgasmdc():path  "<<path<<"  pathx "<<pathx<<endl;
-	cout<<"msgasmdc():dth  "<<dth<<endl;
-	cout<<"msgasmdc():ea before: "<<ea<<endl;
+  cout<<"msgasmdc():path  "<<path<<"  pathx "<<pathx<<endl;
+  cout<<"msgasmdc():dth  "<<dth<<endl;
+  cout<<"msgasmdc():ea before: "<<ea<<endl;
 #endif
-	double dth2 = dth * dth;
+  double dth2 = dth * dth;
 
-	ea[1][1] += (1 + t2) * dth2;
-	ea[2][2] += k2 * t2 * dth2;
-	ea[2][4] += k * t * (1 + t2) * dth2;
-	ea[4][4] += (1 + t2) * (1 + t2) * dth2;
+  ea[1][1] += (1 + t2) * dth2;
+  ea[2][2] += k2 * t2 * dth2;
+  ea[2][4] += k * t * (1 + t2) * dth2;
+  ea[4][4] += (1 + t2) * (1 + t2) * dth2;
 
-	// additionnal terms (terms proportional to l and l^2)
+  // additionnal terms (terms proportional to l and l^2)
 
-	ea[3][3] += dth2 * path * path /3 / (1 + t2);
-	ea[3][4] += dth2 * path/2 * sqrt(1 + t2);
-	ea[3][2] += dth2 * t / sqrt(1 + t2) * k * path/2;
-	ea[0][0] += dth2 * path * path/3;
-	ea[0][1] += dth2 * sqrt(1 + t2) * path/2;
+  ea[3][3] += dth2 * path * path /3 / (1 + t2);
+  ea[3][4] += dth2 * path/2 * sqrt(1 + t2);
+  ea[3][2] += dth2 * t / sqrt(1 + t2) * k * path/2;
+  ea[0][0] += dth2 * path * path/3;
+  ea[0][1] += dth2 * sqrt(1 + t2) * path/2;
 
-	Ea(ea);
+  Ea(ea);
 #ifdef YDEBUG
-	cout<<"msgasmdc():ea after: "<<Ea()<<endl;
+  cout<<"msgasmdc():ea after: "<<Ea()<<endl;
 #endif
-	if (index < 0) {
-		pathip_ += path;
-		// RMK : put by hand, take care !!
-		double x0 = mdcGasRadlen_; // for the Mdc gas
-		path_rd_ += path/x0;
-		tof(path);
+  if (index < 0) {
+    pathip_ += path;
+    // RMK : put by hand, take care !!
+    double x0 = mdcGasRadlen_; // for the Mdc gas
+    path_rd_ += path/x0;
+    tof(path);
 #ifdef YDEBUG
-		cout<<"ms...pathip..."<<pathip_<<endl;
+    cout<<"ms...pathip..."<<pathip_<<endl;
 #endif
-	}
+  }
 }
 
 void KalFitTrack::eloss(double path,
-		const KalFitMaterial& material, int index)
+    const KalFitMaterial& material, int index)
 {
 #ifdef YDEBUG
-	cout<<"eloss():ea before: "<<Ea()<<endl;
+  cout<<"eloss():ea before: "<<Ea()<<endl;
 #endif
-	HepVector v_a = a();
-	double v_a_2_2 = v_a[2] * v_a[2];
-	double v_a_4_2 = v_a[4] * v_a[4];
-	double pmag = 1 / fabs(v_a[2]) * sqrt(1 + v_a_4_2);
-	double psq = pmag * pmag;
-	double E = sqrt(mass_ * mass_ + psq);
-	double dE = material.dE(mass_, path, pmag);
-	//std::cout<<" eloss(): dE: "<<dE<<std::endl;//wangll
+  HepVector v_a = a();
+  double v_a_2_2 = v_a[2] * v_a[2];
+  double v_a_4_2 = v_a[4] * v_a[4];
+  double pmag = 1 / fabs(v_a[2]) * sqrt(1 + v_a_4_2);
+  double psq = pmag * pmag;
+  double E = sqrt(mass_ * mass_ + psq);
+  double dE = material.dE(mass_, path, pmag);
+  //std::cout<<" eloss(): dE: "<<dE<<std::endl;//wangll
 
-	if (index > 0) 
-		psq += dE * (dE + 2 * sqrt(mass_ * mass_ + psq));
-	else {
-		double dE_max = E - mass_;
-		if( dE<dE_max ) psq += dE * (dE - 2 * sqrt(mass_ * mass_ + psq));
-		else psq=-1.0;
-	}
+  if (index > 0) 
+    psq += dE * (dE + 2 * sqrt(mass_ * mass_ + psq));
+  else {
+    double dE_max = E - mass_;
+    if( dE<dE_max ) psq += dE * (dE - 2 * sqrt(mass_ * mass_ + psq));
+    else psq=-1.0;
+  }
 
-	if (tofall_ && index < 0){
-		// Kaon case :
-		if (p_kaon_ > 0){
-			double psq_kaon = p_kaon_ * p_kaon_;
-			double dE_kaon = material.dE(MASS[3], path, p_kaon_);
-			psq_kaon += dE_kaon * (dE_kaon - 
-					2 * sqrt(MASS[3] * MASS[3] + psq_kaon));
-			if (psq_kaon < 0) psq_kaon = 0;
-			p_kaon_ = sqrt(psq_kaon);
-		}
-		// Proton case :
-		if (p_proton_ > 0){
-			double psq_proton = p_proton_ * p_proton_;
-			double dE_proton = material.dE(MASS[4], path, p_proton_);
-			psq_proton += dE_proton * (dE_proton - 
-					2 * sqrt(MASS[4] * MASS[4] + psq_proton));
-			if (psq_proton < 0) psq_proton = 0;
-			p_proton_ = sqrt(psq_proton);
-		}
-	}
+  if (tofall_ && index < 0){
+    // Kaon case :
+    if (p_kaon_ > 0){
+      double psq_kaon = p_kaon_ * p_kaon_;
+      double dE_kaon = material.dE(MASS[3], path, p_kaon_);
+      psq_kaon += dE_kaon * (dE_kaon - 
+	  2 * sqrt(MASS[3] * MASS[3] + psq_kaon));
+      if (psq_kaon < 0) psq_kaon = 0;
+      p_kaon_ = sqrt(psq_kaon);
+    }
+    // Proton case :
+    if (p_proton_ > 0){
+      double psq_proton = p_proton_ * p_proton_;
+      double dE_proton = material.dE(MASS[4], path, p_proton_);
+      psq_proton += dE_proton * (dE_proton - 
+	  2 * sqrt(MASS[4] * MASS[4] + psq_proton));
+      if (psq_proton < 0) psq_proton = 0;
+      p_proton_ = sqrt(psq_proton);
+    }
+  }
 
-	double dpt;
-	//cout<<"eloss(): psq = "<<psq<<endl;//wangll
-	if(psq < 0) dpt = 9999;
-	else dpt = v_a[2] * pmag / sqrt(psq);
-	//cout<<"eloss():k:   "<<v_a[2]<<"  k'  "<<dpt<<endl;//wangll
+  double dpt;
+  //cout<<"eloss(): psq = "<<psq<<endl;//wangll
+  if(psq < 0) dpt = 9999;
+  else dpt = v_a[2] * pmag / sqrt(psq);
+  //cout<<"eloss():k:   "<<v_a[2]<<"  k'  "<<dpt<<endl;//wangll
 #ifdef YDEBUG
-	cout<<"eloss():k:   "<<v_a[2]<<"  k'  "<<dpt<<endl;
+  cout<<"eloss():k:   "<<v_a[2]<<"  k'  "<<dpt<<endl;
 #endif
-	// attempt to take account of energy loss for error matrix 
+  // attempt to take account of energy loss for error matrix 
 
-	HepSymMatrix ea = Ea();
-	double r_E_prim = (E + dE)/E;
+  HepSymMatrix ea = Ea();
+  double r_E_prim = (E + dE)/E;
 
-	// 1/ Straggling in the energy loss :
-	if (strag_){
-		double del_E(0);
-		if(l_mass_==0) {
-			del_E = dE*factor_strag_;
-		}   else  {
-			del_E  = material.del_E(mass_, path, pmag);
-		}
+  // 1/ Straggling in the energy loss :
+  if (strag_){
+    double del_E(0);
+    if(l_mass_==0) {
+      del_E = dE*factor_strag_;
+    }   else  {
+      del_E  = material.del_E(mass_, path, pmag);
+    }
 
-		ea[2][2] += (v_a[2] * v_a[2]) * E * E * del_E * del_E / (psq*psq);
-	}
+    ea[2][2] += (v_a[2] * v_a[2]) * E * E * del_E * del_E / (psq*psq);
+  }
 
-	// Effect of the change of curvature (just variables change):
-	double dpt2 = dpt*dpt;
-	double A = dpt*dpt2/(v_a_2_2*v_a[2])*r_E_prim;
-	double B = v_a[4]/(1+v_a_4_2)*
-		dpt*(1-dpt2/v_a_2_2*r_E_prim);
+  // Effect of the change of curvature (just variables change):
+  double dpt2 = dpt*dpt;
+  double A = dpt*dpt2/(v_a_2_2*v_a[2])*r_E_prim;
+  double B = v_a[4]/(1+v_a_4_2)*
+    dpt*(1-dpt2/v_a_2_2*r_E_prim);
 
-	double ea_2_0 = A*ea[2][0] + B*ea[4][0];
-	double ea_2_1 = A*ea[2][1] + B*ea[4][1];
-	double ea_2_2 = A*A*ea[2][2] + 2*A*B*ea[2][4] + B*B*ea[4][4]; 
-	double ea_2_3 = A*ea[2][3] + B*ea[4][3]; 
-	double ea_2_4 = A*ea[2][4] + B*ea[4][4];
+  double ea_2_0 = A*ea[2][0] + B*ea[4][0];
+  double ea_2_1 = A*ea[2][1] + B*ea[4][1];
+  double ea_2_2 = A*A*ea[2][2] + 2*A*B*ea[2][4] + B*B*ea[4][4]; 
+  double ea_2_3 = A*ea[2][3] + B*ea[4][3]; 
+  double ea_2_4 = A*ea[2][4] + B*ea[4][4];
 
-	v_a[2] = dpt;
-	a(v_a);
+  v_a[2] = dpt;
+  a(v_a);
 
-	ea[2][0] = ea_2_0;
-	//std::cout<<"ea[2][0] is "<<ea[2][0]<<" ea(3,1) is "<<ea(3,1)<<std::endl;
-	ea[2][1] = ea_2_1;
-	//std::cout<<"ea[2][2] is "<<ea[2][2]<<" ea(3,3) is "<<ea(3,3)<<std::endl;
-	ea[2][2] = ea_2_2;
-	ea[2][3] = ea_2_3;
-	ea[2][4] = ea_2_4;
+  ea[2][0] = ea_2_0;
+  //std::cout<<"ea[2][0] is "<<ea[2][0]<<" ea(3,1) is "<<ea(3,1)<<std::endl;
+  ea[2][1] = ea_2_1;
+  //std::cout<<"ea[2][2] is "<<ea[2][2]<<" ea(3,3) is "<<ea(3,3)<<std::endl;
+  ea[2][2] = ea_2_2;
+  ea[2][3] = ea_2_3;
+  ea[2][4] = ea_2_4;
 
-	Ea(ea);
-	//cout<<"eloss():dE:   "<<dE<<endl;
-	//cout<<"eloss():A:   "<<A<<"   B:    "<<B<<endl;
-	//cout<<"eloss():ea after: "<<Ea()<<endl;
-	r0_ = fabs(center().perp() - fabs(radius()));
+  Ea(ea);
+  //cout<<"eloss():dE:   "<<dE<<endl;
+  //cout<<"eloss():A:   "<<A<<"   B:    "<<B<<endl;
+  //cout<<"eloss():ea after: "<<Ea()<<endl;
+  r0_ = fabs(center().perp() - fabs(radius()));
 }
 
 void KalFitTrack::order_wirhit(int index)
 {
-	unsigned int nhit = HitsMdc_.size();
-	Helix tracktest = *(Helix*)this;
-	int ind = 0;
-	double* Rad = new double[nhit];
-	double* Ypos = new double[nhit];
-	for( unsigned i=0 ; i < nhit; i++ ){
+  unsigned int nhit = HitsMdc_.size();
+  Helix tracktest = *(Helix*)this;
+  int ind = 0;
+  double* Rad = new double[nhit];
+  double* Ypos = new double[nhit];
+  for( unsigned i=0 ; i < nhit; i++ ){
 
-		HepPoint3D fwd(HitsMdc_[i].wire().fwd());
-		HepPoint3D bck(HitsMdc_[i].wire().bck());
-		Hep3Vector wire = (CLHEP::Hep3Vector)fwd -(CLHEP::Hep3Vector)bck;
+    HepPoint3D fwd(HitsMdc_[i].wire().fwd());
+    HepPoint3D bck(HitsMdc_[i].wire().bck());
+    Hep3Vector wire = (CLHEP::Hep3Vector)fwd -(CLHEP::Hep3Vector)bck;
 
-		// Modification for stereo wires :
-		Helix work = tracktest;
-		work.ignoreErrorMatrix();
-		work.pivot((fwd + bck) * .5);
-		HepPoint3D x0 = (work.x(0).z() - bck.z())
-			/ wire.z() * wire + bck;
+    // Modification for stereo wires :
+    Helix work = tracktest;
+    work.ignoreErrorMatrix();
+    work.pivot((fwd + bck) * .5);
+    HepPoint3D x0 = (work.x(0).z() - bck.z())
+      / wire.z() * wire + bck;
 
-		tracktest.pivot(x0);
-		Rad[ind] = tracktest.x(0).perp();
-		Ypos[ind] = x0.y();
-		ind++;
-		//cout<<"Ypos: "<<Ypos[ind-1]<<endl;
+    tracktest.pivot(x0);
+    Rad[ind] = tracktest.x(0).perp();
+    Ypos[ind] = x0.y();
+    ind++;
+    //cout<<"Ypos: "<<Ypos[ind-1]<<endl;
+  }
+
+  // Reorder...
+  if (index < 0)
+    for(int j, k = nhit - 1; k >= 0; k = j){
+      j = -1;
+      for(int i = 1; i <= k; i++)
+	if(Rad[i - 1] > Rad[i]){
+	  j = i - 1;
+	  std::swap(Rad[i], Rad[j]);
+	  std::swap(HitsMdc_[i], HitsMdc_[j]);
 	}
-
-	// Reorder...
-	if (index < 0)
-		for(int j, k = nhit - 1; k >= 0; k = j){
-			j = -1;
-			for(int i = 1; i <= k; i++)
-				if(Rad[i - 1] > Rad[i]){
-					j = i - 1;
-					std::swap(Rad[i], Rad[j]);
-					std::swap(HitsMdc_[i], HitsMdc_[j]);
-				}
-		}
-	if (index > 0)
-		for(int j, k = nhit - 1; k >= 0; k = j){
-			j = -1;
-			for(int i = 1; i <= k; i++)
-				if(Rad[i - 1] < Rad[i]){
-					j = i - 1;
-					std::swap(Rad[i], Rad[j]);
-					std::swap(HitsMdc_[i], HitsMdc_[j]);
-				}
-		}
-	if (index == 0)
-		for(int j, k = nhit - 1; k >= 0; k = j){
-			j = -1;
-			for(int i = 1; i <= k; i++)
-				if(Ypos[i - 1] > Ypos[i]){
-					j = i - 1;
-					std::swap(Ypos[i], Ypos[j]);
-					std::swap(HitsMdc_[i], HitsMdc_[j]);
-				}
-		}
-	delete [] Rad;
-	delete [] Ypos;
+    }
+  if (index > 0)
+    for(int j, k = nhit - 1; k >= 0; k = j){
+      j = -1;
+      for(int i = 1; i <= k; i++)
+	if(Rad[i - 1] < Rad[i]){
+	  j = i - 1;
+	  std::swap(Rad[i], Rad[j]);
+	  std::swap(HitsMdc_[i], HitsMdc_[j]);
+	}
+    }
+  if (index == 0)
+    for(int j, k = nhit - 1; k >= 0; k = j){
+      j = -1;
+      for(int i = 1; i <= k; i++)
+	if(Ypos[i - 1] > Ypos[i]){
+	  j = i - 1;
+	  std::swap(Ypos[i], Ypos[j]);
+	  std::swap(HitsMdc_[i], HitsMdc_[j]);
+	}
+    }
+  delete [] Rad;
+  delete [] Ypos;
 }
 
 void KalFitTrack::order_hits(void){
-	for(int it=0; it<HitsMdc().size()-1; it++){
-		if(HitsMdc_[it].wire().layer().layerId() == HitsMdc_[it+1].wire().layer().layerId())    
-		{
-			if((kappa()<0)&&(HitsMdc_[it].wire().localId() > HitsMdc_[it+1].wire().localId())){
-				std::swap(HitsMdc_[it], HitsMdc_[it+1]);
-			}
-			if((kappa()>0)&&(HitsMdc_[it].wire().localId() < HitsMdc_[it+1].wire().localId())){
-				std::swap(HitsMdc_[it], HitsMdc_[it+1]);
-			}
-		}
-	}
+  for(int it=0; it<HitsMdc().size()-1; it++){
+    if(HitsMdc_[it].wire().layer().layerId() == HitsMdc_[it+1].wire().layer().layerId())    
+    {
+      if((kappa()<0)&&(HitsMdc_[it].wire().localId() > HitsMdc_[it+1].wire().localId())){
+	std::swap(HitsMdc_[it], HitsMdc_[it+1]);
+      }
+      if((kappa()>0)&&(HitsMdc_[it].wire().localId() < HitsMdc_[it+1].wire().localId())){
+	std::swap(HitsMdc_[it], HitsMdc_[it+1]);
+      }
+    }
+  }
 }
 
 
 void KalFitTrack::number_wirhit(void)
 {
-	unsigned int nhit = HitsMdc_.size();
-	int Num[50] = {0};
-	for( unsigned i=0 ; i < nhit; i++ )
-		Num[HitsMdc_[i].wire().layer().layerId()]++;
-	for( unsigned i=0 ; i < nhit; i++ )
-		if (Num[HitsMdc_[i].wire().layer().layerId()]>2)
-			HitsMdc_[i].chi2(-2);
+  unsigned int nhit = HitsMdc_.size();
+  int Num[50] = {0};
+  for( unsigned i=0 ; i < nhit; i++ )
+    Num[HitsMdc_[i].wire().layer().layerId()]++;
+  for( unsigned i=0 ; i < nhit; i++ )
+    if (Num[HitsMdc_[i].wire().layer().layerId()]>2)
+      HitsMdc_[i].chi2(-2);
 }
 
 
 double KalFitTrack::smoother_Mdc(KalFitHitMdc& HitMdc, Hep3Vector& meas, KalFitHelixSeg& seg, double& dchi2, int csmflag)
 {
-	// 
-	double lr = HitMdc.LR();
-	// For taking the propagation delay into account :
-	int wire_ID = HitMdc.wire().geoID(); 
-	int layerid = HitMdc.wire().layer().layerId();
-	double entrangle = HitMdc.rechitptr()->getEntra();
+  // 
+  double lr = HitMdc.LR();
+  // For taking the propagation delay into account :
+  int wire_ID = HitMdc.wire().geoID(); 
+  int layerid = HitMdc.wire().layer().layerId();
+  double entrangle = HitMdc.rechitptr()->getEntra();
 
-	//yzhang delte for CDC 2014-04-10 
-	//if (wire_ID<0 || wire_ID>6796){ //bes
-	//	std::cout << "KalFitTrack : wire_ID problem : " << wire_ID << std::endl;
-	//	return 0;
-	//} 
+  //yzhang delte for CDC 2014-04-10 
+  //if (wire_ID<0 || wire_ID>6796){ //bes
+  //	std::cout << "KalFitTrack : wire_ID problem : " << wire_ID << std::endl;
+  //	return 0;
+  //} 
 
-	double x[3] ={pivot().x(), pivot().y(), pivot().z()};
-	double pmom[3] ={momentum().x(), momentum().y(), momentum().z()};
+  double x[3] ={pivot().x(), pivot().y(), pivot().z()};
+  double pmom[3] ={momentum().x(), momentum().y(), momentum().z()};
 
-	double tofest(0);
-	double dd(0.);
-	//double phi = fmod(phi0() + M_PI4, M_PI2);
-	double phi = fmod(phi0() + M_PI4*2., M_PI2*2.);//yzhang 2014-06-18 
-	double csf0 = cos(phi);
-	double snf0 = (1. - csf0) * (1. + csf0);
-	snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
-	if(phi > M_PI) snf0 = - snf0;
-	//if(phi > M_PI&&debug_==4) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug NOT delete phi > M_PI "<<std::endl;
+  double tofest(0);
+  double dd(0.);
+  //double phi = fmod(phi0() + M_PI4, M_PI2);
+  double phi = fmod(phi0() + M_PI4*2., M_PI2*2.);//yzhang 2014-06-18 
+  double csf0 = cos(phi);
+  double snf0 = (1. - csf0) * (1. + csf0);
+  snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
+  if(phi > M_PI) snf0 = - snf0;
+  //if(phi > M_PI&&debug_==4) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug NOT delete phi > M_PI "<<std::endl;
 
-	if (Tof_correc_) {
-		Hep3Vector ip(0, 0, 0);
-		Helix work = *(Helix*)this;
-		work.ignoreErrorMatrix();
-		work.pivot(ip);
-		double phi_ip = work.phi0();
-		if (fabs(phi - phi_ip) > M_PI) {
-			if (phi > phi_ip) phi -= 2 * M_PI;
-			else phi_ip -= 2 * M_PI;
-		}
-		double t = tanl();
-		double l = fabs(radius() * (phi - phi_ip) * sqrt(1 + t * t));
-		if(Tof_correc_fltLenFromRec_) l = HitMdc.rechitptr()->getFltLen();//yzhang add 2014-05-03 
-		double pmag( sqrt( 1.0 + t*t ) / kappa());
-		double mass_over_p( mass_ / pmag );
-		double beta( 1.0 / sqrt( 1.0 + mass_over_p * mass_over_p ) );
-		tofest = l / ( 29.9792458 * beta );
-		if(csmflag==1 && HitMdc.wire().y()>0.)  tofest= -1. * tofest;
-		if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<" fltLen  "<<l <<" fltlen fromRec "<<HitMdc.rechitptr()->getFltLen()<<" tofest "<<tofest<<std::endl;
-	}
+  if (Tof_correc_) {
+    Hep3Vector ip(0, 0, 0);
+    Helix work = *(Helix*)this;
+    work.ignoreErrorMatrix();
+    work.pivot(ip);
+    double phi_ip = work.phi0();
+    if (fabs(phi - phi_ip) > M_PI) {
+      if (phi > phi_ip) phi -= 2 * M_PI;
+      else phi_ip -= 2 * M_PI;
+    }
+    double t = tanl();
+    double l = fabs(radius() * (phi - phi_ip) * sqrt(1 + t * t));
+    if(Tof_correc_fltLenFromRec_) l = HitMdc.rechitptr()->getFltLen();//yzhang add 2014-05-03 
+    double pmag( sqrt( 1.0 + t*t ) / kappa());
+    double mass_over_p( mass_ / pmag );
+    double beta( 1.0 / sqrt( 1.0 + mass_over_p * mass_over_p ) );
+    tofest = l / ( 29.9792458 * beta );
+    if(csmflag==1 && HitMdc.wire().y()>0.)  tofest= -1. * tofest;
+    if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<" fltLen  "<<l <<" fltlen fromRec "<<HitMdc.rechitptr()->getFltLen()<<" tofest "<<tofest<<std::endl;
+  }
 
-	const HepSymMatrix& ea = Ea();
-	const HepVector& v_a = a();
+  const HepSymMatrix& ea = Ea();
+  const HepVector& v_a = a();
 
-	HepPoint3D pivot_work = pivot();
+  HepPoint3D pivot_work = pivot();
 
-	double dchi2R(99999999), dchi2L(99999999);
+  double dchi2R(99999999), dchi2L(99999999);
 
-	HepVector v_H(5, 0);
-	v_H[0] =  -csf0 * meas.x() - snf0 * meas.y();
-	v_H[3] =  -meas.z();
-	HepMatrix v_HT = v_H.T();
+  HepVector v_H(5, 0);
+  v_H[0] =  -csf0 * meas.x() - snf0 * meas.y();
+  v_H[3] =  -meas.z();
+  HepMatrix v_HT = v_H.T();
 
-	double estim = (v_HT * v_a)[0];
-	HepVector ea_v_H = ea * v_H;  
-	HepMatrix ea_v_HT = (ea_v_H).T();
-	HepVector v_H_T_ea_v_H = v_HT * ea_v_H;
+  double estim = (v_HT * v_a)[0];
+  HepVector ea_v_H = ea * v_H;  
+  HepMatrix ea_v_HT = (ea_v_H).T();
+  HepVector v_H_T_ea_v_H = v_HT * ea_v_H;
 
-	HepSymMatrix eaNew(5);
-	HepVector aNew(5);
+  HepSymMatrix eaNew(5);
+  HepVector aNew(5);
 
-	//double time = HitMdc.tdc();
-	// if (Tof_correc_)
-	//  time -= tofest;
+  //double time = HitMdc.tdc();
+  // if (Tof_correc_)
+  //  time -= tofest;
 
-	double drifttime = getDriftTime(HitMdc , tofest); 
-	//cout<<"drifttime = "<<drifttime<<endl;
-	seg.dt(drifttime);
-	double ddl = getDriftDist(HitMdc, drifttime, 0);
-	double ddr = getDriftDist(HitMdc, drifttime, 1);
-	/*cout<<endl<<" $$$  smoother_Mdc():: "<<endl;//wangll
-	cout<<"pivot = "<<pivot()<<endl;//wangll
-	cout<<"helix = "<<a()<<endl;//wangll
-	cout<<"drifttime = "<<drifttime<<endl;//wangll
-	cout<<"ddl, ddr = "<<ddl<<", "<<ddr<<endl;//wangll
-	*/
-	double erddl = getSigma( HitMdc, a()[4], 0, ddl);
-	double erddr = getSigma( HitMdc, a()[4], 1, ddr); 
+  double drifttime = getDriftTime(HitMdc , tofest); 
+  //cout<<"drifttime = "<<drifttime<<endl;
+  seg.dt(drifttime);
+  double ddl = getDriftDist(HitMdc, drifttime, 0);
+  double ddr = getDriftDist(HitMdc, drifttime, 1);
+  /*cout<<endl<<" $$$  smoother_Mdc():: "<<endl;//wangll
+    cout<<"pivot = "<<pivot()<<endl;//wangll
+    cout<<"helix = "<<a()<<endl;//wangll
+    cout<<"drifttime = "<<drifttime<<endl;//wangll
+    cout<<"ddl, ddr = "<<ddl<<", "<<ddr<<endl;//wangll
+   */
+  double erddl = getSigma( HitMdc, a()[4], 0, ddl);
+  double erddr = getSigma( HitMdc, a()[4], 1, ddr); 
 
-	//  double dd = 1.0e-4 * 40.0 * time;
-	double dmeas2[2] = { 0.1*ddl, 0.1*ddr }; //millimeter to centimeter 
-	double er_dmeas2[2] = {0. , 0.};
-	if(resolflag_== 1) { 
-		er_dmeas2[0] = 0.1*erddl;
-		er_dmeas2[1] = 0.1*erddr;
-	} 
-	else if(resolflag_ == 0) {
-		//int layid = HitMdc.wire().layer().layerId();
-		//double sigma = getSigma(layid, dd);
-		//er_dmeas2[0] = er_dmeas2[1] = sigma;
-	}
+  //  double dd = 1.0e-4 * 40.0 * time;
+  double dmeas2[2] = { 0.1*ddl, 0.1*ddr }; //millimeter to centimeter 
+  double er_dmeas2[2] = {0. , 0.};
+  if(resolflag_== 1) { 
+    er_dmeas2[0] = 0.1*erddl;
+    er_dmeas2[1] = 0.1*erddr;
+  } 
+  else if(resolflag_ == 0) {
+    //int layid = HitMdc.wire().layer().layerId();
+    //double sigma = getSigma(layid, dd);
+    //er_dmeas2[0] = er_dmeas2[1] = sigma;
+  }
 
-	// Left hypothesis :
-	if (lr == -1) {
-		double er_dmeasL, dmeasL;
-		if(Tof_correc_) {
-			dmeasL = (-1.0)*dmeas2[0];  // the dmeas&erdmeas  calculated by myself 
-			er_dmeasL = er_dmeas2[0];
-		} else {
-			dmeasL = (-1.0)*fabs(HitMdc.dist()[0]); // the dmeas&erdmeas  calculated by track-finding algorithm
-			er_dmeasL = HitMdc.erdist()[0];
-		}
+  // Left hypothesis :
+  if (lr == -1) {
+    double er_dmeasL, dmeasL;
+    if(Tof_correc_) {
+      dmeasL = (-1.0)*dmeas2[0];  // the dmeas&erdmeas  calculated by myself 
+      er_dmeasL = er_dmeas2[0];
+    } else {
+      dmeasL = (-1.0)*fabs(HitMdc.dist()[0]); // the dmeas&erdmeas  calculated by track-finding algorithm
+      er_dmeasL = HitMdc.erdist()[0];
+    }
 
-		double AL = 1 / ((v_H_T_ea_v_H)[0] + er_dmeasL*er_dmeasL);
-		eaNew.assign(ea - ea_v_H * AL * ea_v_HT);
-		double RkL = 1 - (v_H_T_ea_v_H)[0] * AL;
-		if(0. == RkL) RkL = 1.e-4;
+    double AL = 1 / ((v_H_T_ea_v_H)[0] + er_dmeasL*er_dmeasL);
+    eaNew.assign(ea - ea_v_H * AL * ea_v_HT);
+    double RkL = 1 - (v_H_T_ea_v_H)[0] * AL;
+    if(0. == RkL) RkL = 1.e-4;
 
-		HepVector diffL = ea_v_H * AL * (dmeasL - estim);
-		aNew = v_a + diffL;
-		double sigL = (dmeasL - (v_HT * aNew)[0]);
-		dchi2L =  (sigL*sigL) /  (RkL * er_dmeasL*er_dmeasL);
-	} else if (lr == 1) {
-		// Right hypothesis :
+    HepVector diffL = ea_v_H * AL * (dmeasL - estim);
+    aNew = v_a + diffL;
+    double sigL = (dmeasL - (v_HT * aNew)[0]);
+    dchi2L =  (sigL*sigL) /  (RkL * er_dmeasL*er_dmeasL);
+  } else if (lr == 1) {
+    // Right hypothesis :
 
-		double er_dmeasR, dmeasR;
-		if(Tof_correc_) {
-			dmeasR = dmeas2[1];
-			er_dmeasR = er_dmeas2[1];
-		} else {
-			dmeasR = fabs(HitMdc.dist()[1]);
-			er_dmeasR = HitMdc.erdist()[1];
-		}
+    double er_dmeasR, dmeasR;
+    if(Tof_correc_) {
+      dmeasR = dmeas2[1];
+      er_dmeasR = er_dmeas2[1];
+    } else {
+      dmeasR = fabs(HitMdc.dist()[1]);
+      er_dmeasR = HitMdc.erdist()[1];
+    }
 
 
-		double AR = 1 / ((v_H_T_ea_v_H)[0] + er_dmeasR*er_dmeasR);
-		eaNew.assign(ea - ea_v_H * AR * ea_v_HT);
-		double RkR = 1 - (v_H_T_ea_v_H)[0] * AR;
-		if(0. == RkR) RkR = 1.e-4;
+    double AR = 1 / ((v_H_T_ea_v_H)[0] + er_dmeasR*er_dmeasR);
+    eaNew.assign(ea - ea_v_H * AR * ea_v_HT);
+    double RkR = 1 - (v_H_T_ea_v_H)[0] * AR;
+    if(0. == RkR) RkR = 1.e-4;
 
-		HepVector diffR = ea_v_H * AR * (dmeasR - estim);
-		aNew = v_a + diffR;
-		double sigR = (dmeasR- (v_HT * aNew)[0]);
-		dchi2R =  (sigR*sigR) /  (RkR * er_dmeasR*er_dmeasR);
-	}
+    HepVector diffR = ea_v_H * AR * (dmeasR - estim);
+    aNew = v_a + diffR;
+    double sigR = (dmeasR- (v_HT * aNew)[0]);
+    dchi2R =  (sigR*sigR) /  (RkR * er_dmeasR*er_dmeasR);
+  }
 
-	// Update Kalman result :
+  // Update Kalman result :
 #ifdef YDEBUG
-	cout<<"in smoother_Mdc: lr= "<<lr<<" a: "<<v_a<<" a_NEW: "<<aNew<<endl;
+  cout<<"in smoother_Mdc: lr= "<<lr<<" a: "<<v_a<<" a_NEW: "<<aNew<<endl;
 #endif
-	double dchi2_loc(0);
-	if ((dchi2R < dchi2cuts_anal[layerid] && lr == 1) || 
-			(dchi2L < dchi2cuts_anal[layerid] && lr == -1)) {
-		ndf_back_++;
-		int chge(1);
-		if ( !( aNew[2] && fabs(aNew[2]-a()[2]) < 1.0 ) ) chge=0;
-		if (lr == 1) {
-			chiSq_back_ += dchi2R;
-			dchi2_loc = dchi2R;
-			dd = 0.1*ddr;
-		} else if (lr == -1) {
-			chiSq_back_ += dchi2L;
-			dchi2_loc = dchi2L;
-			dd = -0.1*ddl;
-		} 
-		if (chge){
-			a(aNew);
-			Ea(eaNew);
-		}
-	}
-	dchi2=dchi2_loc;
+  double dchi2_loc(0);
+  if ((dchi2R < dchi2cuts_anal[layerid] && lr == 1) || 
+      (dchi2L < dchi2cuts_anal[layerid] && lr == -1)) {
+    ndf_back_++;
+    int chge(1);
+    if ( !( aNew[2] && fabs(aNew[2]-a()[2]) < 1.0 ) ) chge=0;
+    if (lr == 1) {
+      chiSq_back_ += dchi2R;
+      dchi2_loc = dchi2R;
+      dd = 0.1*ddr;
+    } else if (lr == -1) {
+      chiSq_back_ += dchi2L;
+      dchi2_loc = dchi2L;
+      dd = -0.1*ddl;
+    } 
+    if (chge){
+      a(aNew);
+      Ea(eaNew);
+    }
+  }
+  dchi2=dchi2_loc;
 
-	seg.doca_include(fabs((v_HT*a())[0]));
-	seg.doca_exclude(fabs(estim));
-	/// move the pivot of the helixseg to IP(0,0,0)
-	Hep3Vector ip(0, 0, 0);
-	KalFitTrack helixNew1(pivot_work, a(), Ea(), 0, 0, 0);
-	helixNew1.pivot(ip);
-	HepVector    a_temp1  = helixNew1.a();
-	HepSymMatrix ea_temp1 = helixNew1.Ea();
-	seg.Ea(ea_temp1);
-	seg.a(a_temp1);
-	seg.Ea_include(ea_temp1);
-	seg.a_include(a_temp1);
+  seg.doca_include(fabs((v_HT*a())[0]));
+  seg.doca_exclude(fabs(estim));
+  /// move the pivot of the helixseg to IP(0,0,0)
+  Hep3Vector ip(0, 0, 0);
+  KalFitTrack helixNew1(pivot_work, a(), Ea(), 0, 0, 0);
+  helixNew1.pivot(ip);
+  HepVector    a_temp1  = helixNew1.a();
+  HepSymMatrix ea_temp1 = helixNew1.Ea();
+  seg.Ea(ea_temp1);
+  seg.a(a_temp1);
+  seg.Ea_include(ea_temp1);
+  seg.a_include(a_temp1);
 
-	KalFitTrack helixNew2(pivot_work, v_a, ea, 0, 0, 0);
-	helixNew2.pivot(ip);
-	HepVector    a_temp2  = helixNew2.a();
-	HepSymMatrix ea_temp2 = helixNew2.Ea();
-	seg.Ea_exclude(ea_temp2);
-	seg.a_exclude(a_temp2);
+  KalFitTrack helixNew2(pivot_work, v_a, ea, 0, 0, 0);
+  helixNew2.pivot(ip);
+  HepVector    a_temp2  = helixNew2.a();
+  HepSymMatrix ea_temp2 = helixNew2.Ea();
+  seg.Ea_exclude(ea_temp2);
+  seg.a_exclude(a_temp2);
 
-	seg.tof(tofest);
-	seg.dd(dd);
+  seg.tof(tofest);
+  seg.dd(dd);
 
-	return chiSq_back_;
+  return chiSq_back_;
 }
 
 // Smoothing procedure in Mdc cosmic align
@@ -690,301 +692,301 @@ double KalFitTrack::smoother_Mdc_csmalign(KalFitHelixSeg& seg, Hep3Vector& meas,
 {
 
 
-	HepPoint3D ip(0., 0., 0.);
-	// attention! we should not to decide the left&right in the smoother process,
-	// because we choose the left&right of hits from the filter process. 
+  HepPoint3D ip(0., 0., 0.);
+  // attention! we should not to decide the left&right in the smoother process,
+  // because we choose the left&right of hits from the filter process. 
 
-	KalFitHitMdc* HitMdc = seg.HitMdc();
-	double lr = HitMdc->LR();
+  KalFitHitMdc* HitMdc = seg.HitMdc();
+  double lr = HitMdc->LR();
 
-	// For taking the propagation delay into account :
-	int layerid  = (*HitMdc).wire().layer().layerId();
-	int wire_ID = HitMdc->wire().geoID();
-	double entrangle = HitMdc->rechitptr()->getEntra();
+  // For taking the propagation delay into account :
+  int layerid  = (*HitMdc).wire().layer().layerId();
+  int wire_ID = HitMdc->wire().geoID();
+  double entrangle = HitMdc->rechitptr()->getEntra();
 
-	//yzhang delte for CDC 2014-04-10 
-	//if (wire_ID<0 || wire_ID>6796){ //bes
-	//	std::cout << "KalFitTrack : wire_ID problem : " << wire_ID << std::endl;
-	//	return 0;
-	//} 
+  //yzhang delte for CDC 2014-04-10 
+  //if (wire_ID<0 || wire_ID>6796){ //bes
+  //	std::cout << "KalFitTrack : wire_ID problem : " << wire_ID << std::endl;
+  //	return 0;
+  //} 
 
-	double x[3] ={pivot().x(), pivot().y(), pivot().z()};
-	double pmom[3] ={momentum().x(), momentum().y(), momentum().z()};
-	double dd(0.);
-	double tofest(0);
-	//double phi = fmod(phi0() + M_PI4, M_PI2);
-	double phi = fmod(phi0() + M_PI4*2., M_PI2*2.);//yzhang 2014-06-18 
-	double csf0 = cos(phi);
-	double snf0 = (1. - csf0) * (1. + csf0);
-	double snf0_new = sin(phi);
-	snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
-	if(phi > M_PI) snf0 = - snf0;
-	if(phi > M_PI) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete  snf0 "<<snf0<<" snf0_new "<<snf0_new<<std::endl;
+  double x[3] ={pivot().x(), pivot().y(), pivot().z()};
+  double pmom[3] ={momentum().x(), momentum().y(), momentum().z()};
+  double dd(0.);
+  double tofest(0);
+  //double phi = fmod(phi0() + M_PI4, M_PI2);
+  double phi = fmod(phi0() + M_PI4*2., M_PI2*2.);//yzhang 2014-06-18 
+  double csf0 = cos(phi);
+  double snf0 = (1. - csf0) * (1. + csf0);
+  double snf0_new = sin(phi);
+  snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
+  if(phi > M_PI) snf0 = - snf0;
+  if(phi > M_PI) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete  snf0 "<<snf0<<" snf0_new "<<snf0_new<<std::endl;
 
-	if (Tof_correc_) {
-		Hep3Vector ip(0, 0, 0);
-		Helix work = *(Helix*)this;
-		work.ignoreErrorMatrix();
-		work.pivot(ip);
-		double phi_ip = work.phi0();
-		if (fabs(phi - phi_ip) > M_PI) {
-			if (phi > phi_ip) phi -= 2 * M_PI;
-			else phi_ip -= 2 * M_PI;
-		}
-		double t = tanl();
-		double l = fabs(radius() * (phi - phi_ip) * sqrt(1 + t * t));
-		if(Tof_correc_fltLenFromRec_) l = HitMdc->rechitptr()->getFltLen();//yzhang add 2014-05-03 
-		double pmag( sqrt( 1.0 + t*t ) / kappa());
-		double mass_over_p( mass_ / pmag );
-		double beta( 1.0 / sqrt( 1.0 + mass_over_p * mass_over_p ) );
-		tofest = l / ( 29.9792458 * beta );
-		if(csmflag==1 && (*HitMdc).wire().y()>0.)  tofest= -1. * tofest;
-		if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<" fltLen  "<<l <<" fltlen fromRec "<<HitMdc->rechitptr()->getFltLen()<<" tofest "<<tofest<<std::endl;
-	}
+  if (Tof_correc_) {
+    Hep3Vector ip(0, 0, 0);
+    Helix work = *(Helix*)this;
+    work.ignoreErrorMatrix();
+    work.pivot(ip);
+    double phi_ip = work.phi0();
+    if (fabs(phi - phi_ip) > M_PI) {
+      if (phi > phi_ip) phi -= 2 * M_PI;
+      else phi_ip -= 2 * M_PI;
+    }
+    double t = tanl();
+    double l = fabs(radius() * (phi - phi_ip) * sqrt(1 + t * t));
+    if(Tof_correc_fltLenFromRec_) l = HitMdc->rechitptr()->getFltLen();//yzhang add 2014-05-03 
+    double pmag( sqrt( 1.0 + t*t ) / kappa());
+    double mass_over_p( mass_ / pmag );
+    double beta( 1.0 / sqrt( 1.0 + mass_over_p * mass_over_p ) );
+    tofest = l / ( 29.9792458 * beta );
+    if(csmflag==1 && (*HitMdc).wire().y()>0.)  tofest= -1. * tofest;
+    if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<" fltLen  "<<l <<" fltlen fromRec "<<HitMdc->rechitptr()->getFltLen()<<" tofest "<<tofest<<std::endl;
+  }
 
-	const HepSymMatrix& ea = Ea();
-	const HepVector& v_a = a();
-
-
-	HepPoint3D pivot_work = pivot();
-
-	/*
-	   HepVector a_work = a();
-	   HepSymMatrix ea_work = Ea();
-
-	   KalFitTrack helix_work(pivot_work, a_work, ea_work, 0, 0, 0);
-	   helix_work.pivot(ip);
-
-	   HepVector a_temp = helix_work.a();
-	   HepSymMatrix ea_temp = helix_work.Ea();
-
-	   seg.Ea_pre_bwd(ea_temp);	
-	   seg.a_pre_bwd(a_temp);
-
-	 */
-
-	seg.a_pre_bwd(a()); 
-	seg.Ea_pre_bwd(Ea()); 
-
-	double dchi2R(99999999), dchi2L(99999999);
-	HepVector v_H(5, 0);
-	v_H[0] =  -csf0 * meas.x() - snf0 * meas.y();
-	v_H[3] =  -meas.z();
-	HepMatrix v_HT = v_H.T();
-
-	double estim = (v_HT * v_a)[0];
-	HepVector ea_v_H = ea * v_H;  
-	HepMatrix ea_v_HT = (ea_v_H).T();
-	HepVector v_H_T_ea_v_H = v_HT * ea_v_H;
-	HepSymMatrix eaNew(5);
-	HepVector aNew(5);
-	double time = (*HitMdc).tdc();
-
-	//seg.dt(time);
-	// if (Tof_correc_)
-	// { 
-	//  time -= tofest;
-	//  seg.dt(time);
-	// }
-	// double dd = 1.0e-4 * 40.0 * time;
-	// seg.dd(dd);
-
-	double drifttime = getDriftTime(*HitMdc , tofest);
-	seg.dt(drifttime);
-	double ddl = getDriftDist(*HitMdc, drifttime, 0 );
-	double ddr = getDriftDist(*HitMdc, drifttime, 1 );
-	double erddl = getSigma( *HitMdc, a()[4], 0, ddl);
-	double erddr = getSigma( *HitMdc, a()[4], 1, ddr);
-
-	double dmeas2[2] = { 0.1*ddl, 0.1*ddr }; // millimeter to centimeter
-	double er_dmeas2[2] = {0., 0.};
-	if(resolflag_ == 1) { 
-		er_dmeas2[0] = 0.1*erddl;
-		er_dmeas2[1] = 0.1*erddr;
-	}else if(resolflag_ == 0)  
-	{
-	}
-
-	// Left hypothesis :
-	if (lr == -1) {
-		double er_dmeasL, dmeasL;
-		if(Tof_correc_) {
-			dmeasL = (-1.0)*dmeas2[0];
-			er_dmeasL = er_dmeas2[0];
-		} else {
-			dmeasL = (-1.0)*fabs((*HitMdc).dist()[0]);
-			er_dmeasL = (*HitMdc).erdist()[0];
-		}
+  const HepSymMatrix& ea = Ea();
+  const HepVector& v_a = a();
 
 
-		//if(layerid < 4)  er_dmeasL*=2.0;
+  HepPoint3D pivot_work = pivot();
 
-		double AL = 1 / ((v_H_T_ea_v_H)[0] + er_dmeasL*er_dmeasL);
-		eaNew.assign(ea - ea_v_H * AL * ea_v_HT);
-		double RkL = 1 - (v_H_T_ea_v_H)[0] * AL;
-		if(0. == RkL) RkL = 1.e-4;
+  /*
+     HepVector a_work = a();
+     HepSymMatrix ea_work = Ea();
 
-		HepVector diffL = ea_v_H * AL * (dmeasL - estim);
-		aNew = v_a + diffL;
-		double sigL = (dmeasL - (v_HT * aNew)[0]);
-		dchi2L =  (sigL*sigL) /  (RkL * er_dmeasL*er_dmeasL);
-	} else if (lr == 1) {
-		// Right hypothesis :
+     KalFitTrack helix_work(pivot_work, a_work, ea_work, 0, 0, 0);
+     helix_work.pivot(ip);
 
-		double er_dmeasR, dmeasR;
-		if(Tof_correc_) {
-			dmeasR = dmeas2[1];
-			er_dmeasR = er_dmeas2[1];
-		} else {
-			dmeasR = fabs((*HitMdc).dist()[1]);
-			er_dmeasR = (*HitMdc).erdist()[1];
-		}
+     HepVector a_temp = helix_work.a();
+     HepSymMatrix ea_temp = helix_work.Ea();
+
+     seg.Ea_pre_bwd(ea_temp);	
+     seg.a_pre_bwd(a_temp);
+
+   */
+
+  seg.a_pre_bwd(a()); 
+  seg.Ea_pre_bwd(Ea()); 
+
+  double dchi2R(99999999), dchi2L(99999999);
+  HepVector v_H(5, 0);
+  v_H[0] =  -csf0 * meas.x() - snf0 * meas.y();
+  v_H[3] =  -meas.z();
+  HepMatrix v_HT = v_H.T();
+
+  double estim = (v_HT * v_a)[0];
+  HepVector ea_v_H = ea * v_H;  
+  HepMatrix ea_v_HT = (ea_v_H).T();
+  HepVector v_H_T_ea_v_H = v_HT * ea_v_H;
+  HepSymMatrix eaNew(5);
+  HepVector aNew(5);
+  double time = (*HitMdc).tdc();
+
+  //seg.dt(time);
+  // if (Tof_correc_)
+  // { 
+  //  time -= tofest;
+  //  seg.dt(time);
+  // }
+  // double dd = 1.0e-4 * 40.0 * time;
+  // seg.dd(dd);
+
+  double drifttime = getDriftTime(*HitMdc , tofest);
+  seg.dt(drifttime);
+  double ddl = getDriftDist(*HitMdc, drifttime, 0 );
+  double ddr = getDriftDist(*HitMdc, drifttime, 1 );
+  double erddl = getSigma( *HitMdc, a()[4], 0, ddl);
+  double erddr = getSigma( *HitMdc, a()[4], 1, ddr);
+
+  double dmeas2[2] = { 0.1*ddl, 0.1*ddr }; // millimeter to centimeter
+  double er_dmeas2[2] = {0., 0.};
+  if(resolflag_ == 1) { 
+    er_dmeas2[0] = 0.1*erddl;
+    er_dmeas2[1] = 0.1*erddr;
+  }else if(resolflag_ == 0)  
+  {
+  }
+
+  // Left hypothesis :
+  if (lr == -1) {
+    double er_dmeasL, dmeasL;
+    if(Tof_correc_) {
+      dmeasL = (-1.0)*dmeas2[0];
+      er_dmeasL = er_dmeas2[0];
+    } else {
+      dmeasL = (-1.0)*fabs((*HitMdc).dist()[0]);
+      er_dmeasL = (*HitMdc).erdist()[0];
+    }
 
 
-		//if(layerid < 4)  er_dmeasR*=2.0;
+    //if(layerid < 4)  er_dmeasL*=2.0;
+
+    double AL = 1 / ((v_H_T_ea_v_H)[0] + er_dmeasL*er_dmeasL);
+    eaNew.assign(ea - ea_v_H * AL * ea_v_HT);
+    double RkL = 1 - (v_H_T_ea_v_H)[0] * AL;
+    if(0. == RkL) RkL = 1.e-4;
+
+    HepVector diffL = ea_v_H * AL * (dmeasL - estim);
+    aNew = v_a + diffL;
+    double sigL = (dmeasL - (v_HT * aNew)[0]);
+    dchi2L =  (sigL*sigL) /  (RkL * er_dmeasL*er_dmeasL);
+  } else if (lr == 1) {
+    // Right hypothesis :
+
+    double er_dmeasR, dmeasR;
+    if(Tof_correc_) {
+      dmeasR = dmeas2[1];
+      er_dmeasR = er_dmeas2[1];
+    } else {
+      dmeasR = fabs((*HitMdc).dist()[1]);
+      er_dmeasR = (*HitMdc).erdist()[1];
+    }
 
 
-		double AR = 1 / ((v_H_T_ea_v_H)[0] + er_dmeasR*er_dmeasR);
-		eaNew.assign(ea - ea_v_H * AR * ea_v_HT);
-		double RkR = 1 - (v_H_T_ea_v_H)[0] * AR;
-		if(0. == RkR) RkR = 1.e-4;
+    //if(layerid < 4)  er_dmeasR*=2.0;
 
-		HepVector diffR = ea_v_H * AR * (dmeasR - estim);
-		aNew = v_a + diffR;
-		double sigR = (dmeasR- (v_HT * aNew)[0]);
-		dchi2R =  (sigR*sigR) /  (RkR * er_dmeasR*er_dmeasR);
-	}
 
-	// Update Kalman result :
+    double AR = 1 / ((v_H_T_ea_v_H)[0] + er_dmeasR*er_dmeasR);
+    eaNew.assign(ea - ea_v_H * AR * ea_v_HT);
+    double RkR = 1 - (v_H_T_ea_v_H)[0] * AR;
+    if(0. == RkR) RkR = 1.e-4;
+
+    HepVector diffR = ea_v_H * AR * (dmeasR - estim);
+    aNew = v_a + diffR;
+    double sigR = (dmeasR- (v_HT * aNew)[0]);
+    dchi2R =  (sigR*sigR) /  (RkR * er_dmeasR*er_dmeasR);
+  }
+
+  // Update Kalman result :
 #ifdef YDEBUG
-	cout<<"in smoother_Mdc: lr= "<<lr<<" a: "<<v_a<<" a_NEW: "<<aNew<<endl;
+  cout<<"in smoother_Mdc: lr= "<<lr<<" a: "<<v_a<<" a_NEW: "<<aNew<<endl;
 #endif
-	double dchi2_loc(0);
-	if ((dchi2R < dchi2cuts_calib[layerid] && lr == 1) || 
-			(dchi2L < dchi2cuts_calib[layerid] && lr == -1)) {
+  double dchi2_loc(0);
+  if ((dchi2R < dchi2cuts_calib[layerid] && lr == 1) || 
+      (dchi2L < dchi2cuts_calib[layerid] && lr == -1)) {
 
-		ndf_back_++;
-		flg = 1;
-		int chge(1);
-		if (!(aNew[2] && fabs(aNew[2]-a()[2]) < 1.0))  chge = 0;
-		if (lr == 1) {
-			chiSq_back_ += dchi2R;
-			dchi2_loc = dchi2R;
-			dd = 0.1*ddr;
-			// if(debug_ ==4) std::cout<<"in  smoother "<<std::endl;
+    ndf_back_++;
+    flg = 1;
+    int chge(1);
+    if (!(aNew[2] && fabs(aNew[2]-a()[2]) < 1.0))  chge = 0;
+    if (lr == 1) {
+      chiSq_back_ += dchi2R;
+      dchi2_loc = dchi2R;
+      dd = 0.1*ddr;
+      // if(debug_ ==4) std::cout<<"in  smoother "<<std::endl;
 
-		} else if (lr == -1) {
-			chiSq_back_ += dchi2L;
-			dchi2_loc = dchi2L;
-			dd = -0.1*ddl;
+    } else if (lr == -1) {
+      chiSq_back_ += dchi2L;
+      dchi2_loc = dchi2L;
+      dd = -0.1*ddl;
 
-		} 
-		if (chge){
-			a(aNew);
-			Ea(eaNew);
-		}
+    } 
+    if (chge){
+      a(aNew);
+      Ea(eaNew);
+    }
 
-		seg.a_filt_bwd(aNew);
-		seg.Ea_filt_bwd(eaNew);
+    seg.a_filt_bwd(aNew);
+    seg.Ea_filt_bwd(eaNew);
 
-		HepVector a_pre_fwd_temp=seg.a_pre_fwd();
-		if( (a_pre_fwd_temp[1]-seg.a_pre_bwd()[1]) > 3. * M_PI /2.)  a_pre_fwd_temp[1]-= M_PI2;
-		if( (a_pre_fwd_temp[1]-seg.a_pre_bwd()[1]) < -3. * M_PI /2. )  a_pre_fwd_temp[1]+= M_PI2;
+    HepVector a_pre_fwd_temp=seg.a_pre_fwd();
+    if( (a_pre_fwd_temp[1]-seg.a_pre_bwd()[1]) > 3. * M_PI /2.)  a_pre_fwd_temp[1]-= M_PI2;
+    if( (a_pre_fwd_temp[1]-seg.a_pre_bwd()[1]) < -3. * M_PI /2. )  a_pre_fwd_temp[1]+= M_PI2;
 
-		seg.a_pre_fwd(a_pre_fwd_temp);
+    seg.a_pre_fwd(a_pre_fwd_temp);
 
-		HepVector a_pre_filt_temp=seg.a_filt_fwd();
-		if( (a_pre_filt_temp[1]-seg.a_pre_bwd()[1]) > 3. * M_PI /2. )  a_pre_filt_temp[1] -= M_PI2;
-		if( (a_pre_filt_temp[1]-seg.a_pre_bwd()[1]) < -3. * M_PI /2.)  a_pre_filt_temp[1] += M_PI2;
-		seg.a_filt_fwd(a_pre_filt_temp);
+    HepVector a_pre_filt_temp=seg.a_filt_fwd();
+    if( (a_pre_filt_temp[1]-seg.a_pre_bwd()[1]) > 3. * M_PI /2. )  a_pre_filt_temp[1] -= M_PI2;
+    if( (a_pre_filt_temp[1]-seg.a_pre_bwd()[1]) < -3. * M_PI /2.)  a_pre_filt_temp[1] += M_PI2;
+    seg.a_filt_fwd(a_pre_filt_temp);
 
-		/*   
-		     KalFitTrack helixNew(pivot_work, aNew, eaNew, 0, 0, 0);
-		     helixNew.pivot(ip);
-		     a_temp = helixNew.a();
-		     ea_temp = helixNew.Ea();
-		     seg.Ea_filt_bwd(ea_temp);
-		     seg.a_filt_bwd(a_temp);
-		 */
+    /*   
+	 KalFitTrack helixNew(pivot_work, aNew, eaNew, 0, 0, 0);
+	 helixNew.pivot(ip);
+	 a_temp = helixNew.a();
+	 ea_temp = helixNew.Ea();
+	 seg.Ea_filt_bwd(ea_temp);
+	 seg.a_filt_bwd(a_temp);
+     */
 
-		int inv;
+    int inv;
 
-		if(debug_ == 4){
-			std::cout<<"seg.Ea_pre_bwd().inverse(inv) ..."<<seg.Ea_pre_bwd().inverse(inv)<<std::endl;
-			std::cout<<"seg.Ea_pre_fwd().inverse(inv) ..."<<seg.Ea_pre_fwd().inverse(inv)<<std::endl;
-		}
+    if(debug_ == 4){
+      std::cout<<"seg.Ea_pre_bwd().inverse(inv) ..."<<seg.Ea_pre_bwd().inverse(inv)<<std::endl;
+      std::cout<<"seg.Ea_pre_fwd().inverse(inv) ..."<<seg.Ea_pre_fwd().inverse(inv)<<std::endl;
+    }
 
-		HepSymMatrix  Ea_pre_comb = (seg.Ea_pre_bwd().inverse(inv)+seg.Ea_pre_fwd().inverse(inv)).inverse(inv);
-		seg.Ea_exclude(Ea_pre_comb);
-
-
-		if(debug_ == 4) {
-			std::cout<<"Ea_pre_comb_ ... "<<Ea_pre_comb<<std::endl;
-			std::cout<<"seg.a_pre_bwd()..."<<seg.a_pre_bwd()<<std::endl;
-			std::cout<<"seg.a_pre_fwd()..."<<seg.a_pre_fwd()<<std::endl;
-		}
-		HepVector  a_pre_comb = Ea_pre_comb*((seg.Ea_pre_bwd().inverse(inv))*seg.a_pre_bwd()+(seg.Ea_pre_fwd().inverse(inv))*seg.a_pre_fwd());
-		seg.a_exclude(a_pre_comb);
-
-		if(debug_ == 4) {
-			std::cout<<"seg.Ea_filt_fwd()..."<<seg.Ea_filt_fwd()<<std::endl;
-			std::cout<<"seg.Ea_filt_fwd().inverse(inv)..."<<seg.Ea_filt_fwd().inverse(inv)<<std::endl;
-		}
-		seg.Ea((seg.Ea_filt_fwd().inverse(inv)+seg.Ea_pre_bwd().inverse(inv)).inverse(inv));
-		seg.Ea_include((seg.Ea_filt_fwd().inverse(inv)+seg.Ea_pre_bwd().inverse(inv)).inverse(inv));
-
-		if(debug_ == 4) {
-			std::cout<<"seg.Ea() is ..."<<seg.Ea()<<std::endl;
-			std::cout<<"seg.Ea_filt_fwd().inverse(inv)*seg.a_filt_fwd() ..."<<seg.Ea_filt_fwd().inverse(inv)*seg.a_filt_fwd()<<std::endl;
-			std::cout<<"seg.Ea_pre_bwd().inverse(inv)*seg.a_pre_bwd() ... "<<seg.Ea_pre_bwd().inverse(inv)*seg.a_pre_bwd()<<std::endl;
-		}
-
-		seg.a(seg.Ea()*(seg.Ea_filt_fwd().inverse(inv)*seg.a_filt_fwd()+seg.Ea_pre_bwd().inverse(inv)*seg.a_pre_bwd()));
-		seg.a_include(seg.Ea()*(seg.Ea_filt_fwd().inverse(inv)*seg.a_filt_fwd()+seg.Ea_pre_bwd().inverse(inv)*seg.a_pre_bwd()));
-
-		if(inv != 0) {
-			//std::cout<<"ERROR OCCUR WHEN INVERSE MATRIX !"<<std::endl;
-		}
-
-		seg.residual_exclude(dd - (v_HT*a_pre_comb)[0]);
-		seg.residual_include(dd - (v_HT*seg.a())[0]);
-		seg.doca_exclude(fabs((v_HT*a_pre_comb)[0]));
-		seg.doca_include(fabs((v_HT*seg.a())[0]));
-
-		if(debug_ == 4){
-			std::cout<<"the dd in smoother_Mdc is "<<dd
-				<<" the (v_HT*a_pre_comb)[0] is "<<(v_HT*a_pre_comb)[0]<<std::endl;
-		}
-
-		//compare the two method to calculate the include doca value : 
-		if(debug_ == 4){
-			std::cout<<"method 1 ..."<<sqrt(seg.a()[0]*seg.a()[0]+seg.a()[3]*seg.a()[3])<<std::endl;
-			std::cout<<"method 2 ..."<<fabs((v_HT*seg.a())[0])<<std::endl;
-		}
+    HepSymMatrix  Ea_pre_comb = (seg.Ea_pre_bwd().inverse(inv)+seg.Ea_pre_fwd().inverse(inv)).inverse(inv);
+    seg.Ea_exclude(Ea_pre_comb);
 
 
-		/// move the pivot of the helixseg to IP(0,0,0)
-		KalFitTrack helixNew1(pivot_work, seg.a(), seg.Ea(), 0, 0, 0);
-		helixNew1.pivot(ip);
-		HepVector    a_temp1  = helixNew1.a();
-		HepSymMatrix ea_temp1 = helixNew1.Ea();
-		seg.Ea(ea_temp1);
-		seg.a(a_temp1);
-		seg.Ea_include(ea_temp1);
-		seg.a_include(a_temp1);
+    if(debug_ == 4) {
+      std::cout<<"Ea_pre_comb_ ... "<<Ea_pre_comb<<std::endl;
+      std::cout<<"seg.a_pre_bwd()..."<<seg.a_pre_bwd()<<std::endl;
+      std::cout<<"seg.a_pre_fwd()..."<<seg.a_pre_fwd()<<std::endl;
+    }
+    HepVector  a_pre_comb = Ea_pre_comb*((seg.Ea_pre_bwd().inverse(inv))*seg.a_pre_bwd()+(seg.Ea_pre_fwd().inverse(inv))*seg.a_pre_fwd());
+    seg.a_exclude(a_pre_comb);
 
-		KalFitTrack helixNew2(pivot_work, seg.a_exclude(), seg.Ea_exclude(), 0, 0, 0);
-		helixNew2.pivot(ip);
-		HepVector    a_temp2  = helixNew2.a();
-		HepSymMatrix ea_temp2 = helixNew2.Ea();	   
-		seg.Ea_exclude(ea_temp2);		     
-		seg.a_exclude(a_temp2);		    
+    if(debug_ == 4) {
+      std::cout<<"seg.Ea_filt_fwd()..."<<seg.Ea_filt_fwd()<<std::endl;
+      std::cout<<"seg.Ea_filt_fwd().inverse(inv)..."<<seg.Ea_filt_fwd().inverse(inv)<<std::endl;
+    }
+    seg.Ea((seg.Ea_filt_fwd().inverse(inv)+seg.Ea_pre_bwd().inverse(inv)).inverse(inv));
+    seg.Ea_include((seg.Ea_filt_fwd().inverse(inv)+seg.Ea_pre_bwd().inverse(inv)).inverse(inv));
 
-		seg.tof(tofest);
-		seg.dd(dd);
+    if(debug_ == 4) {
+      std::cout<<"seg.Ea() is ..."<<seg.Ea()<<std::endl;
+      std::cout<<"seg.Ea_filt_fwd().inverse(inv)*seg.a_filt_fwd() ..."<<seg.Ea_filt_fwd().inverse(inv)*seg.a_filt_fwd()<<std::endl;
+      std::cout<<"seg.Ea_pre_bwd().inverse(inv)*seg.a_pre_bwd() ... "<<seg.Ea_pre_bwd().inverse(inv)*seg.a_pre_bwd()<<std::endl;
+    }
 
-	}
-	return chiSq_back_;
+    seg.a(seg.Ea()*(seg.Ea_filt_fwd().inverse(inv)*seg.a_filt_fwd()+seg.Ea_pre_bwd().inverse(inv)*seg.a_pre_bwd()));
+    seg.a_include(seg.Ea()*(seg.Ea_filt_fwd().inverse(inv)*seg.a_filt_fwd()+seg.Ea_pre_bwd().inverse(inv)*seg.a_pre_bwd()));
+
+    if(inv != 0) {
+      //std::cout<<"ERROR OCCUR WHEN INVERSE MATRIX !"<<std::endl;
+    }
+
+    seg.residual_exclude(dd - (v_HT*a_pre_comb)[0]);
+    seg.residual_include(dd - (v_HT*seg.a())[0]);
+    seg.doca_exclude(fabs((v_HT*a_pre_comb)[0]));
+    seg.doca_include(fabs((v_HT*seg.a())[0]));
+
+    if(debug_ == 4){
+      std::cout<<"the dd in smoother_Mdc is "<<dd
+	<<" the (v_HT*a_pre_comb)[0] is "<<(v_HT*a_pre_comb)[0]<<std::endl;
+    }
+
+    //compare the two method to calculate the include doca value : 
+    if(debug_ == 4){
+      std::cout<<"method 1 ..."<<sqrt(seg.a()[0]*seg.a()[0]+seg.a()[3]*seg.a()[3])<<std::endl;
+      std::cout<<"method 2 ..."<<fabs((v_HT*seg.a())[0])<<std::endl;
+    }
+
+
+    /// move the pivot of the helixseg to IP(0,0,0)
+    KalFitTrack helixNew1(pivot_work, seg.a(), seg.Ea(), 0, 0, 0);
+    helixNew1.pivot(ip);
+    HepVector    a_temp1  = helixNew1.a();
+    HepSymMatrix ea_temp1 = helixNew1.Ea();
+    seg.Ea(ea_temp1);
+    seg.a(a_temp1);
+    seg.Ea_include(ea_temp1);
+    seg.a_include(a_temp1);
+
+    KalFitTrack helixNew2(pivot_work, seg.a_exclude(), seg.Ea_exclude(), 0, 0, 0);
+    helixNew2.pivot(ip);
+    HepVector    a_temp2  = helixNew2.a();
+    HepSymMatrix ea_temp2 = helixNew2.Ea();	   
+    seg.Ea_exclude(ea_temp2);		     
+    seg.a_exclude(a_temp2);		    
+
+    seg.tof(tofest);
+    seg.dd(dd);
+
+  }
+  return chiSq_back_;
 }
 
 // Smoothing procedure in Mdc calib
@@ -993,302 +995,302 @@ double KalFitTrack::smoother_Mdc(KalFitHelixSeg& seg, Hep3Vector& meas,int& flg,
 {
 
 
-	HepPoint3D ip(0., 0., 0.);
-	// attention! we should not to decide the left&right in the smoother process,
-	// because we choose the left&right of hits from the filter process. 
+  HepPoint3D ip(0., 0., 0.);
+  // attention! we should not to decide the left&right in the smoother process,
+  // because we choose the left&right of hits from the filter process. 
 
-	KalFitHitMdc* HitMdc = seg.HitMdc();
-	double lr = HitMdc->LR();
+  KalFitHitMdc* HitMdc = seg.HitMdc();
+  double lr = HitMdc->LR();
 
-	// For taking the propagation delay into account :
-	int layerid  = (*HitMdc).wire().layer().layerId();
-	int wire_ID = HitMdc->wire().geoID();
-	double entrangle = HitMdc->rechitptr()->getEntra();
+  // For taking the propagation delay into account :
+  int layerid  = (*HitMdc).wire().layer().layerId();
+  int wire_ID = HitMdc->wire().geoID();
+  double entrangle = HitMdc->rechitptr()->getEntra();
 
-	//yzhang delte for CDC 2014-04-10 
-	//if (wire_ID<0 || wire_ID>6796){ //bes
-	//	std::cout << "KalFitTrack : wire_ID problem : " << wire_ID << std::endl;
-	//	return 0;
-	//} 
+  //yzhang delte for CDC 2014-04-10 
+  //if (wire_ID<0 || wire_ID>6796){ //bes
+  //	std::cout << "KalFitTrack : wire_ID problem : " << wire_ID << std::endl;
+  //	return 0;
+  //} 
 
-	double x[3] ={pivot().x(), pivot().y(), pivot().z()};
-	double pmom[3] ={momentum().x(), momentum().y(), momentum().z()};
-	double dd(0.);
-	double tofest(0);
-	//double phi = fmod(phi0() + M_PI4, M_PI2);
-	double phi = fmod(phi0() + M_PI4*2., M_PI2*2.);//yzhang 2014-06-18 
-	double csf0 = cos(phi);
-	double snf0 = (1. - csf0) * (1. + csf0);
-	snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
-	if(phi > M_PI) snf0 = - snf0;
-	if(phi > M_PI) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete   "<<std::endl;
+  double x[3] ={pivot().x(), pivot().y(), pivot().z()};
+  double pmom[3] ={momentum().x(), momentum().y(), momentum().z()};
+  double dd(0.);
+  double tofest(0);
+  //double phi = fmod(phi0() + M_PI4, M_PI2);
+  double phi = fmod(phi0() + M_PI4*2., M_PI2*2.);//yzhang 2014-06-18 
+  double csf0 = cos(phi);
+  double snf0 = (1. - csf0) * (1. + csf0);
+  snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
+  if(phi > M_PI) snf0 = - snf0;
+  if(phi > M_PI) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete   "<<std::endl;
 
-	if (Tof_correc_) {
-		Hep3Vector ip(0, 0, 0);
-		Helix work = *(Helix*)this;
-		work.ignoreErrorMatrix();
-		work.pivot(ip);
-		double phi_ip = work.phi0();
-		if (fabs(phi - phi_ip) > M_PI) {
-			if (phi > phi_ip) phi -= 2 * M_PI;
-			else phi_ip -= 2 * M_PI;
-		}
-		double t = tanl();
-		double l = fabs(radius() * (phi - phi_ip) * sqrt(1 + t * t));
-		if(Tof_correc_fltLenFromRec_) l = HitMdc->rechitptr()->getFltLen();//yzhang add 2014-05-03 
-		double pmag( sqrt( 1.0 + t*t ) / kappa());
-		double mass_over_p( mass_ / pmag );
-		double beta( 1.0 / sqrt( 1.0 + mass_over_p * mass_over_p ) );
-		tofest = l / ( 29.9792458 * beta );
-		if(csmflag==1 && (*HitMdc).wire().y()>0.)  tofest= -1. * tofest;
-		if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<" fltLen  "<<l <<" fltlen fromRec "<<HitMdc->rechitptr()->getFltLen()<<" tofest "<<tofest<<std::endl;
-	}
+  if (Tof_correc_) {
+    Hep3Vector ip(0, 0, 0);
+    Helix work = *(Helix*)this;
+    work.ignoreErrorMatrix();
+    work.pivot(ip);
+    double phi_ip = work.phi0();
+    if (fabs(phi - phi_ip) > M_PI) {
+      if (phi > phi_ip) phi -= 2 * M_PI;
+      else phi_ip -= 2 * M_PI;
+    }
+    double t = tanl();
+    double l = fabs(radius() * (phi - phi_ip) * sqrt(1 + t * t));
+    if(Tof_correc_fltLenFromRec_) l = HitMdc->rechitptr()->getFltLen();//yzhang add 2014-05-03 
+    double pmag( sqrt( 1.0 + t*t ) / kappa());
+    double mass_over_p( mass_ / pmag );
+    double beta( 1.0 / sqrt( 1.0 + mass_over_p * mass_over_p ) );
+    tofest = l / ( 29.9792458 * beta );
+    if(csmflag==1 && (*HitMdc).wire().y()>0.)  tofest= -1. * tofest;
+    if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<" fltLen  "<<l <<" fltlen fromRec "<<HitMdc->rechitptr()->getFltLen()<<" tofest "<<tofest<<std::endl;
+  }
 
-	const HepSymMatrix& ea = Ea();
-	const HepVector& v_a = a();
-
-
-
-	HepPoint3D pivot_work = pivot();
-
-	/*
-	   HepVector a_work = a();
-	   HepSymMatrix ea_work = Ea();
-
-	   KalFitTrack helix_work(pivot_work, a_work, ea_work, 0, 0, 0);
-	   helix_work.pivot(ip);
-
-	   HepVector a_temp = helix_work.a();
-	   HepSymMatrix ea_temp = helix_work.Ea();
-
-	   seg.Ea_pre_bwd(ea_temp);	
-	   seg.a_pre_bwd(a_temp);
-
-	 */
-
-	seg.a_pre_bwd(a()); 
-	seg.Ea_pre_bwd(Ea()); 
-
-	double dchi2R(99999999), dchi2L(99999999);
-	HepVector v_H(5, 0);
-	v_H[0] =  -csf0 * meas.x() - snf0 * meas.y();
-	v_H[3] =  -meas.z();
-	HepMatrix v_HT = v_H.T();
-
-	double estim = (v_HT * v_a)[0];
-	HepVector ea_v_H = ea * v_H;  
-	HepMatrix ea_v_HT = (ea_v_H).T();
-	HepVector v_H_T_ea_v_H = v_HT * ea_v_H;
-	HepSymMatrix eaNew(5);
-	HepVector aNew(5);
-	double time = (*HitMdc).tdc();
-
-	//seg.dt(time);
-	// if (Tof_correc_)
-	// { 
-	//  time -= tofest;
-	//  seg.dt(time);
-	// }
-	// double dd = 1.0e-4 * 40.0 * time;
-	// seg.dd(dd);
-
-	double drifttime = getDriftTime(*HitMdc , tofest);
-	seg.dt(drifttime);
-	double ddl = getDriftDist(*HitMdc, drifttime, 0 );
-	double ddr = getDriftDist(*HitMdc, drifttime, 1 );
-	double erddl = getSigma( *HitMdc, a()[4], 0, ddl);
-	double erddr = getSigma( *HitMdc, a()[4], 1, ddr);
-
-	double dmeas2[2] = { 0.1*ddl, 0.1*ddr }; // millimeter to centimeter
-	double er_dmeas2[2] = {0., 0.};
-	if(resolflag_ == 1) { 
-		er_dmeas2[0] = 0.1*erddl;
-		er_dmeas2[1] = 0.1*erddr;
-	}else if(resolflag_ == 0)  
-	{
-	}
-
-	// Left hypothesis :
-	if (lr == -1) {
-		double er_dmeasL, dmeasL;
-		if(Tof_correc_) {
-			dmeasL = (-1.0)*dmeas2[0];
-			er_dmeasL = er_dmeas2[0];
-		} else {
-			dmeasL = (-1.0)*fabs((*HitMdc).dist()[0]);
-			er_dmeasL = (*HitMdc).erdist()[0];
-		}
+  const HepSymMatrix& ea = Ea();
+  const HepVector& v_a = a();
 
 
-		//if(layerid < 4)  er_dmeasL*=2.0;
 
-		double AL = 1 / ((v_H_T_ea_v_H)[0] + er_dmeasL*er_dmeasL);
-		eaNew.assign(ea - ea_v_H * AL * ea_v_HT);
-		double RkL = 1 - (v_H_T_ea_v_H)[0] * AL;
-		if(0. == RkL) RkL = 1.e-4;
+  HepPoint3D pivot_work = pivot();
 
-		HepVector diffL = ea_v_H * AL * (dmeasL - estim);
-		aNew = v_a + diffL;
-		double sigL = (dmeasL - (v_HT * aNew)[0]);
-		dchi2L =  (sigL*sigL) /  (RkL * er_dmeasL*er_dmeasL);
-	} else if (lr == 1) {
-		// Right hypothesis :
+  /*
+     HepVector a_work = a();
+     HepSymMatrix ea_work = Ea();
 
-		double er_dmeasR, dmeasR;
-		if(Tof_correc_) {
-			dmeasR = dmeas2[1];
-			er_dmeasR = er_dmeas2[1];
-		} else {
-			dmeasR = fabs((*HitMdc).dist()[1]);
-			er_dmeasR = (*HitMdc).erdist()[1];
-		}
+     KalFitTrack helix_work(pivot_work, a_work, ea_work, 0, 0, 0);
+     helix_work.pivot(ip);
+
+     HepVector a_temp = helix_work.a();
+     HepSymMatrix ea_temp = helix_work.Ea();
+
+     seg.Ea_pre_bwd(ea_temp);	
+     seg.a_pre_bwd(a_temp);
+
+   */
+
+  seg.a_pre_bwd(a()); 
+  seg.Ea_pre_bwd(Ea()); 
+
+  double dchi2R(99999999), dchi2L(99999999);
+  HepVector v_H(5, 0);
+  v_H[0] =  -csf0 * meas.x() - snf0 * meas.y();
+  v_H[3] =  -meas.z();
+  HepMatrix v_HT = v_H.T();
+
+  double estim = (v_HT * v_a)[0];
+  HepVector ea_v_H = ea * v_H;  
+  HepMatrix ea_v_HT = (ea_v_H).T();
+  HepVector v_H_T_ea_v_H = v_HT * ea_v_H;
+  HepSymMatrix eaNew(5);
+  HepVector aNew(5);
+  double time = (*HitMdc).tdc();
+
+  //seg.dt(time);
+  // if (Tof_correc_)
+  // { 
+  //  time -= tofest;
+  //  seg.dt(time);
+  // }
+  // double dd = 1.0e-4 * 40.0 * time;
+  // seg.dd(dd);
+
+  double drifttime = getDriftTime(*HitMdc , tofest);
+  seg.dt(drifttime);
+  double ddl = getDriftDist(*HitMdc, drifttime, 0 );
+  double ddr = getDriftDist(*HitMdc, drifttime, 1 );
+  double erddl = getSigma( *HitMdc, a()[4], 0, ddl);
+  double erddr = getSigma( *HitMdc, a()[4], 1, ddr);
+
+  double dmeas2[2] = { 0.1*ddl, 0.1*ddr }; // millimeter to centimeter
+  double er_dmeas2[2] = {0., 0.};
+  if(resolflag_ == 1) { 
+    er_dmeas2[0] = 0.1*erddl;
+    er_dmeas2[1] = 0.1*erddr;
+  }else if(resolflag_ == 0)  
+  {
+  }
+
+  // Left hypothesis :
+  if (lr == -1) {
+    double er_dmeasL, dmeasL;
+    if(Tof_correc_) {
+      dmeasL = (-1.0)*dmeas2[0];
+      er_dmeasL = er_dmeas2[0];
+    } else {
+      dmeasL = (-1.0)*fabs((*HitMdc).dist()[0]);
+      er_dmeasL = (*HitMdc).erdist()[0];
+    }
 
 
-		//if(layerid < 4)  er_dmeasR*=2.0;
+    //if(layerid < 4)  er_dmeasL*=2.0;
+
+    double AL = 1 / ((v_H_T_ea_v_H)[0] + er_dmeasL*er_dmeasL);
+    eaNew.assign(ea - ea_v_H * AL * ea_v_HT);
+    double RkL = 1 - (v_H_T_ea_v_H)[0] * AL;
+    if(0. == RkL) RkL = 1.e-4;
+
+    HepVector diffL = ea_v_H * AL * (dmeasL - estim);
+    aNew = v_a + diffL;
+    double sigL = (dmeasL - (v_HT * aNew)[0]);
+    dchi2L =  (sigL*sigL) /  (RkL * er_dmeasL*er_dmeasL);
+  } else if (lr == 1) {
+    // Right hypothesis :
+
+    double er_dmeasR, dmeasR;
+    if(Tof_correc_) {
+      dmeasR = dmeas2[1];
+      er_dmeasR = er_dmeas2[1];
+    } else {
+      dmeasR = fabs((*HitMdc).dist()[1]);
+      er_dmeasR = (*HitMdc).erdist()[1];
+    }
 
 
-		double AR = 1 / ((v_H_T_ea_v_H)[0] + er_dmeasR*er_dmeasR);
-		eaNew.assign(ea - ea_v_H * AR * ea_v_HT);
-		double RkR = 1 - (v_H_T_ea_v_H)[0] * AR;
-		if(0. == RkR) RkR = 1.e-4;
+    //if(layerid < 4)  er_dmeasR*=2.0;
 
-		HepVector diffR = ea_v_H * AR * (dmeasR - estim);
-		aNew = v_a + diffR;
-		double sigR = (dmeasR- (v_HT * aNew)[0]);
-		dchi2R =  (sigR*sigR) /  (RkR * er_dmeasR*er_dmeasR);
-	}
 
-	// Update Kalman result :
+    double AR = 1 / ((v_H_T_ea_v_H)[0] + er_dmeasR*er_dmeasR);
+    eaNew.assign(ea - ea_v_H * AR * ea_v_HT);
+    double RkR = 1 - (v_H_T_ea_v_H)[0] * AR;
+    if(0. == RkR) RkR = 1.e-4;
+
+    HepVector diffR = ea_v_H * AR * (dmeasR - estim);
+    aNew = v_a + diffR;
+    double sigR = (dmeasR- (v_HT * aNew)[0]);
+    dchi2R =  (sigR*sigR) /  (RkR * er_dmeasR*er_dmeasR);
+  }
+
+  // Update Kalman result :
 #ifdef YDEBUG
-	cout<<"in smoother_Mdc: lr= "<<lr<<" a: "<<v_a<<" a_NEW: "<<aNew<<endl;
+  cout<<"in smoother_Mdc: lr= "<<lr<<" a: "<<v_a<<" a_NEW: "<<aNew<<endl;
 #endif
-	double dchi2_loc(0);
-	if ((dchi2R < dchi2cuts_calib[layerid] && lr == 1) || 
-			(dchi2L < dchi2cuts_calib[layerid] && lr == -1)) {
+  double dchi2_loc(0);
+  if ((dchi2R < dchi2cuts_calib[layerid] && lr == 1) || 
+      (dchi2L < dchi2cuts_calib[layerid] && lr == -1)) {
 
-		ndf_back_++;
-		flg = 1;
-		int chge(1);
-		if (!(aNew[2] && fabs(aNew[2]-a()[2]) < 1.0))  chge = 0;
-		if (lr == 1) {
-			chiSq_back_ += dchi2R;
-			dchi2_loc = dchi2R;
-			dd = 0.1*ddr;
-			// if(debug_ ==4) std::cout<<"in  smoother "<<std::endl;
+    ndf_back_++;
+    flg = 1;
+    int chge(1);
+    if (!(aNew[2] && fabs(aNew[2]-a()[2]) < 1.0))  chge = 0;
+    if (lr == 1) {
+      chiSq_back_ += dchi2R;
+      dchi2_loc = dchi2R;
+      dd = 0.1*ddr;
+      // if(debug_ ==4) std::cout<<"in  smoother "<<std::endl;
 
-		} else if (lr == -1) {
-			chiSq_back_ += dchi2L;
-			dchi2_loc = dchi2L;
-			dd = -0.1*ddl;
+    } else if (lr == -1) {
+      chiSq_back_ += dchi2L;
+      dchi2_loc = dchi2L;
+      dd = -0.1*ddl;
 
-		} 
-		if (chge){
-			a(aNew);
-			Ea(eaNew);
-		}
+    } 
+    if (chge){
+      a(aNew);
+      Ea(eaNew);
+    }
 
-		seg.a_filt_bwd(aNew);
-		seg.Ea_filt_bwd(eaNew);
+    seg.a_filt_bwd(aNew);
+    seg.Ea_filt_bwd(eaNew);
 
-		HepVector a_pre_fwd_temp=seg.a_pre_fwd();
-		if( (a_pre_fwd_temp[1]-seg.a_pre_bwd()[1]) > 3. * M_PI /2.)  a_pre_fwd_temp[1]-= M_PI2;
-		if( (a_pre_fwd_temp[1]-seg.a_pre_bwd()[1]) < -3. * M_PI /2. )  a_pre_fwd_temp[1]+= M_PI2;
+    HepVector a_pre_fwd_temp=seg.a_pre_fwd();
+    if( (a_pre_fwd_temp[1]-seg.a_pre_bwd()[1]) > 3. * M_PI /2.)  a_pre_fwd_temp[1]-= M_PI2;
+    if( (a_pre_fwd_temp[1]-seg.a_pre_bwd()[1]) < -3. * M_PI /2. )  a_pre_fwd_temp[1]+= M_PI2;
 
-		seg.a_pre_fwd(a_pre_fwd_temp);
+    seg.a_pre_fwd(a_pre_fwd_temp);
 
-		HepVector a_pre_filt_temp=seg.a_filt_fwd();
-		if( (a_pre_filt_temp[1]-seg.a_pre_bwd()[1]) > 3. * M_PI /2. )  a_pre_filt_temp[1] -= M_PI2;
-		if( (a_pre_filt_temp[1]-seg.a_pre_bwd()[1]) < -3. * M_PI /2.)  a_pre_filt_temp[1] += M_PI2;
-		seg.a_filt_fwd(a_pre_filt_temp);
+    HepVector a_pre_filt_temp=seg.a_filt_fwd();
+    if( (a_pre_filt_temp[1]-seg.a_pre_bwd()[1]) > 3. * M_PI /2. )  a_pre_filt_temp[1] -= M_PI2;
+    if( (a_pre_filt_temp[1]-seg.a_pre_bwd()[1]) < -3. * M_PI /2.)  a_pre_filt_temp[1] += M_PI2;
+    seg.a_filt_fwd(a_pre_filt_temp);
 
-		/*   
-		     KalFitTrack helixNew(pivot_work, aNew, eaNew, 0, 0, 0);
-		     helixNew.pivot(ip);
-		     a_temp = helixNew.a();
-		     ea_temp = helixNew.Ea();
-		     seg.Ea_filt_bwd(ea_temp);
-		     seg.a_filt_bwd(a_temp);
-		 */
+    /*   
+	 KalFitTrack helixNew(pivot_work, aNew, eaNew, 0, 0, 0);
+	 helixNew.pivot(ip);
+	 a_temp = helixNew.a();
+	 ea_temp = helixNew.Ea();
+	 seg.Ea_filt_bwd(ea_temp);
+	 seg.a_filt_bwd(a_temp);
+     */
 
-		int inv;
+    int inv;
 
-		if(debug_ == 4){
-			std::cout<<"seg.Ea_pre_bwd().inverse(inv) ..."<<seg.Ea_pre_bwd().inverse(inv)<<std::endl;
-			std::cout<<"seg.Ea_pre_fwd().inverse(inv) ..."<<seg.Ea_pre_fwd().inverse(inv)<<std::endl;
-		}
+    if(debug_ == 4){
+      std::cout<<"seg.Ea_pre_bwd().inverse(inv) ..."<<seg.Ea_pre_bwd().inverse(inv)<<std::endl;
+      std::cout<<"seg.Ea_pre_fwd().inverse(inv) ..."<<seg.Ea_pre_fwd().inverse(inv)<<std::endl;
+    }
 
-		HepSymMatrix  Ea_pre_comb = (seg.Ea_pre_bwd().inverse(inv)+seg.Ea_pre_fwd().inverse(inv)).inverse(inv);
-		seg.Ea_exclude(Ea_pre_comb);
-
-
-		if(debug_ == 4) {
-			std::cout<<"Ea_pre_comb_ ... "<<Ea_pre_comb<<std::endl;
-			std::cout<<"seg.a_pre_bwd()..."<<seg.a_pre_bwd()<<std::endl;
-			std::cout<<"seg.a_pre_fwd()..."<<seg.a_pre_fwd()<<std::endl;
-		}
-		HepVector  a_pre_comb = Ea_pre_comb*((seg.Ea_pre_bwd().inverse(inv))*seg.a_pre_bwd()+(seg.Ea_pre_fwd().inverse(inv))*seg.a_pre_fwd());
-		seg.a_exclude(a_pre_comb);
+    HepSymMatrix  Ea_pre_comb = (seg.Ea_pre_bwd().inverse(inv)+seg.Ea_pre_fwd().inverse(inv)).inverse(inv);
+    seg.Ea_exclude(Ea_pre_comb);
 
 
-		if(debug_ == 4) {
-			std::cout<<"seg.Ea_filt_fwd()..."<<seg.Ea_filt_fwd()<<std::endl;
-			std::cout<<"seg.Ea_filt_fwd().inverse(inv)..."<<seg.Ea_filt_fwd().inverse(inv)<<std::endl;
-		}
-		seg.Ea((seg.Ea_filt_fwd().inverse(inv)+seg.Ea_pre_bwd().inverse(inv)).inverse(inv));
-		seg.Ea_include((seg.Ea_filt_fwd().inverse(inv)+seg.Ea_pre_bwd().inverse(inv)).inverse(inv));
-
-		if(debug_ == 4) {
-			std::cout<<"seg.Ea() is ..."<<seg.Ea()<<std::endl;
-			std::cout<<"seg.Ea_filt_fwd().inverse(inv)*seg.a_filt_fwd() ..."<<seg.Ea_filt_fwd().inverse(inv)*seg.a_filt_fwd()<<std::endl;
-			std::cout<<"seg.Ea_pre_bwd().inverse(inv)*seg.a_pre_bwd() ... "<<seg.Ea_pre_bwd().inverse(inv)*seg.a_pre_bwd()<<std::endl;
-		}
-
-		seg.a(seg.Ea()*(seg.Ea_filt_fwd().inverse(inv)*seg.a_filt_fwd()+seg.Ea_pre_bwd().inverse(inv)*seg.a_pre_bwd()));
-		seg.a_include(seg.Ea()*(seg.Ea_filt_fwd().inverse(inv)*seg.a_filt_fwd()+seg.Ea_pre_bwd().inverse(inv)*seg.a_pre_bwd()));
-
-		if(inv != 0) {
-			//std::cout<<"ERROR OCCUR WHEN INVERSE MATRIX !"<<std::endl;
-		}
-
-		seg.residual_exclude(dd - (v_HT*a_pre_comb)[0]);
-		seg.residual_include(dd - (v_HT*seg.a())[0]);
-		seg.doca_exclude(fabs((v_HT*a_pre_comb)[0]));
-		seg.doca_include(fabs((v_HT*seg.a())[0]));
-
-		if(debug_ == 4){
-			std::cout<<"the dd in smoother_Mdc is "<<dd
-				<<" the (v_HT*a_pre_comb)[0] is "<<(v_HT*a_pre_comb)[0]<<std::endl;
-		}
-
-		//compare the two method to calculate the include doca value : 
-		if(debug_ == 4){
-			std::cout<<"method 1 ..."<<sqrt(seg.a()[0]*seg.a()[0]+seg.a()[3]*seg.a()[3])<<std::endl;
-			std::cout<<"method 2 ..."<<fabs((v_HT*seg.a())[0])<<std::endl;
-		}
+    if(debug_ == 4) {
+      std::cout<<"Ea_pre_comb_ ... "<<Ea_pre_comb<<std::endl;
+      std::cout<<"seg.a_pre_bwd()..."<<seg.a_pre_bwd()<<std::endl;
+      std::cout<<"seg.a_pre_fwd()..."<<seg.a_pre_fwd()<<std::endl;
+    }
+    HepVector  a_pre_comb = Ea_pre_comb*((seg.Ea_pre_bwd().inverse(inv))*seg.a_pre_bwd()+(seg.Ea_pre_fwd().inverse(inv))*seg.a_pre_fwd());
+    seg.a_exclude(a_pre_comb);
 
 
-		/// move the pivot of the helixseg to IP(0,0,0)
-		KalFitTrack helixNew1(pivot_work, seg.a(), seg.Ea(), 0, 0, 0);
-		helixNew1.pivot(ip);
-		HepVector    a_temp1  = helixNew1.a();
-		HepSymMatrix ea_temp1 = helixNew1.Ea();
-		seg.Ea(ea_temp1);
-		seg.a(a_temp1);
-		seg.Ea_include(ea_temp1);
-		seg.a_include(a_temp1);
+    if(debug_ == 4) {
+      std::cout<<"seg.Ea_filt_fwd()..."<<seg.Ea_filt_fwd()<<std::endl;
+      std::cout<<"seg.Ea_filt_fwd().inverse(inv)..."<<seg.Ea_filt_fwd().inverse(inv)<<std::endl;
+    }
+    seg.Ea((seg.Ea_filt_fwd().inverse(inv)+seg.Ea_pre_bwd().inverse(inv)).inverse(inv));
+    seg.Ea_include((seg.Ea_filt_fwd().inverse(inv)+seg.Ea_pre_bwd().inverse(inv)).inverse(inv));
 
-		KalFitTrack helixNew2(pivot_work, seg.a_exclude(), seg.Ea_exclude(), 0, 0, 0);
-		helixNew2.pivot(ip);
-		HepVector    a_temp2  = helixNew2.a();
-		HepSymMatrix ea_temp2 = helixNew2.Ea();	   
-		seg.Ea_exclude(ea_temp2);		     
-		seg.a_exclude(a_temp2);		    
+    if(debug_ == 4) {
+      std::cout<<"seg.Ea() is ..."<<seg.Ea()<<std::endl;
+      std::cout<<"seg.Ea_filt_fwd().inverse(inv)*seg.a_filt_fwd() ..."<<seg.Ea_filt_fwd().inverse(inv)*seg.a_filt_fwd()<<std::endl;
+      std::cout<<"seg.Ea_pre_bwd().inverse(inv)*seg.a_pre_bwd() ... "<<seg.Ea_pre_bwd().inverse(inv)*seg.a_pre_bwd()<<std::endl;
+    }
 
-		seg.tof(tofest);
-		seg.dd(dd);
+    seg.a(seg.Ea()*(seg.Ea_filt_fwd().inverse(inv)*seg.a_filt_fwd()+seg.Ea_pre_bwd().inverse(inv)*seg.a_pre_bwd()));
+    seg.a_include(seg.Ea()*(seg.Ea_filt_fwd().inverse(inv)*seg.a_filt_fwd()+seg.Ea_pre_bwd().inverse(inv)*seg.a_pre_bwd()));
 
-	}
-	return chiSq_back_;
+    if(inv != 0) {
+      //std::cout<<"ERROR OCCUR WHEN INVERSE MATRIX !"<<std::endl;
+    }
+
+    seg.residual_exclude(dd - (v_HT*a_pre_comb)[0]);
+    seg.residual_include(dd - (v_HT*seg.a())[0]);
+    seg.doca_exclude(fabs((v_HT*a_pre_comb)[0]));
+    seg.doca_include(fabs((v_HT*seg.a())[0]));
+
+    if(debug_ == 4){
+      std::cout<<"the dd in smoother_Mdc is "<<dd
+	<<" the (v_HT*a_pre_comb)[0] is "<<(v_HT*a_pre_comb)[0]<<std::endl;
+    }
+
+    //compare the two method to calculate the include doca value : 
+    if(debug_ == 4){
+      std::cout<<"method 1 ..."<<sqrt(seg.a()[0]*seg.a()[0]+seg.a()[3]*seg.a()[3])<<std::endl;
+      std::cout<<"method 2 ..."<<fabs((v_HT*seg.a())[0])<<std::endl;
+    }
+
+
+    /// move the pivot of the helixseg to IP(0,0,0)
+    KalFitTrack helixNew1(pivot_work, seg.a(), seg.Ea(), 0, 0, 0);
+    helixNew1.pivot(ip);
+    HepVector    a_temp1  = helixNew1.a();
+    HepSymMatrix ea_temp1 = helixNew1.Ea();
+    seg.Ea(ea_temp1);
+    seg.a(a_temp1);
+    seg.Ea_include(ea_temp1);
+    seg.a_include(a_temp1);
+
+    KalFitTrack helixNew2(pivot_work, seg.a_exclude(), seg.Ea_exclude(), 0, 0, 0);
+    helixNew2.pivot(ip);
+    HepVector    a_temp2  = helixNew2.a();
+    HepSymMatrix ea_temp2 = helixNew2.Ea();	   
+    seg.Ea_exclude(ea_temp2);		     
+    seg.a_exclude(a_temp2);		    
+
+    seg.tof(tofest);
+    seg.dd(dd);
+
+  }
+  return chiSq_back_;
 }
 
 
@@ -1296,395 +1298,399 @@ double KalFitTrack::smoother_Mdc(KalFitHelixSeg& seg, Hep3Vector& meas,int& flg,
 
 
 double KalFitTrack::filter(double v_m, const HepVector& m_H,
-		double v_d, double m_V)
+    double v_d, double m_V)
 {
-	HepMatrix m_HT = m_H.T();
-	HepPoint3D x0 = x(0);
-	HepVector v_x(3);
-	v_x[0] = x0.x();
-	v_x[1] = x0.y();
-	v_x[2] = x0.z();
-	HepMatrix m_X = delXDelA(0);
-	HepMatrix m_XT = m_X.T();
-	HepMatrix m_C = m_X * Ea() * m_XT;
-	//int err;
-	HepVector m_K = 1 / (m_V + (m_HT * m_C * m_H)[0]) * m_H;
-	HepVector v_a = a();
-	HepSymMatrix ea = Ea();
-	HepMatrix mXTmK = m_XT * m_K;
-	double v_r = v_m - v_d - (m_HT * v_x)[0];
-	v_a += ea * mXTmK * v_r;
-	a(v_a);
-	ea.assign(ea - ea * mXTmK * m_HT * m_X * ea);
-	Ea(ea);
-	// Record last hit included parameters :
-	update_last();
-	HepMatrix mCmK = m_C * m_K;
-	v_x += mCmK * v_r;
-	m_C -= mCmK * m_HT * m_C;
-	v_r = v_m - v_d - (m_HT * v_x)[0];
-	double m_R = m_V - (m_HT * m_C * m_H)[0];
-	double chiSq = v_r * v_r / m_R;
-	chiSq_ += chiSq;
-	return chiSq;
+  HepMatrix m_HT = m_H.T();
+  HepPoint3D x0 = x(0);
+  HepVector v_x(3);
+  v_x[0] = x0.x();
+  v_x[1] = x0.y();
+  v_x[2] = x0.z();
+  HepMatrix m_X = delXDelA(0);
+  HepMatrix m_XT = m_X.T();
+  HepMatrix m_C = m_X * Ea() * m_XT;
+  //int err;
+  HepVector m_K = 1 / (m_V + (m_HT * m_C * m_H)[0]) * m_H;
+  HepVector v_a = a();
+  HepSymMatrix ea = Ea();
+  HepMatrix mXTmK = m_XT * m_K;
+  double v_r = v_m - v_d - (m_HT * v_x)[0];
+  v_a += ea * mXTmK * v_r;
+  a(v_a);
+  ea.assign(ea - ea * mXTmK * m_HT * m_X * ea);
+  Ea(ea);
+  // Record last hit included parameters :
+  update_last();
+  HepMatrix mCmK = m_C * m_K;
+  v_x += mCmK * v_r;
+  m_C -= mCmK * m_HT * m_C;
+  v_r = v_m - v_d - (m_HT * v_x)[0];
+  double m_R = m_V - (m_HT * m_C * m_H)[0];
+  double chiSq = v_r * v_r / m_R;
+  chiSq_ += chiSq;
+  return chiSq;
 }
 
 
 void KalFitTrack::path_add(double path)
 {
-	pathip_ += path;
-	tof(path);
+  pathip_ += path;
+  tof(path);
 }
 
 
 void KalFitTrack::addPathSM(double path){
-	pathSM_ += path;
+  pathSM_ += path;
 }
 
 
 void KalFitTrack::addTofSM(double time){
-	tof2_ += time;
+  tof2_ += time;
 } 
 
 
 void KalFitTrack::fiTerm(double fi){
-	fiTerm_ = fi;
+  fiTerm_ = fi;
+}
+
+void KalFitTrack::fltLenTerm(double fltLen){
+  fltLenTerm_ = fltLen;
 }
 
 
 void KalFitTrack::tof(double path)
 {
-	double light_speed( 29.9792458 );     // light speed in cm/nsec
-	double t = tanl();
-	double pmag( sqrt( 1.0 + t*t ) / kappa());
-	if (pmag !=0) {
-		double mass_over_p( mass_ / pmag );
-		double beta( 1.0 / sqrt( 1.0 + mass_over_p * mass_over_p ) );
-		tof_ += path / ( light_speed * beta );
-	}
+  double light_speed( 29.9792458 );     // light speed in cm/nsec
+  double t = tanl();
+  double pmag( sqrt( 1.0 + t*t ) / kappa());
+  if (pmag !=0) {
+    double mass_over_p( mass_ / pmag );
+    double beta( 1.0 / sqrt( 1.0 + mass_over_p * mass_over_p ) );
+    tof_ += path / ( light_speed * beta );
+  }
 
-	if (tofall_) {
-		if (p_kaon_ > 0){
-			double massk_over_p( MASS[3] / p_kaon_ );
-			double beta_kaon( 1.0 / sqrt( 1.0 + massk_over_p * massk_over_p ) );
-			tof_kaon_ += path / (light_speed * beta_kaon);
-		}
-		if (p_proton_ > 0){
-			double massp_over_p( MASS[4] / p_proton_ );
-			double beta_proton( 1.0 / sqrt( 1.0 + massp_over_p * massp_over_p ) );
-			tof_proton_ += path / (light_speed * beta_proton);
-		}
-	}
+  if (tofall_) {
+    if (p_kaon_ > 0){
+      double massk_over_p( MASS[3] / p_kaon_ );
+      double beta_kaon( 1.0 / sqrt( 1.0 + massk_over_p * massk_over_p ) );
+      tof_kaon_ += path / (light_speed * beta_kaon);
+    }
+    if (p_proton_ > 0){
+      double massp_over_p( MASS[4] / p_proton_ );
+      double beta_proton( 1.0 / sqrt( 1.0 + massp_over_p * massp_over_p ) );
+      tof_proton_ += path / (light_speed * beta_proton);
+    }
+  }
 }
 
 double KalFitTrack::radius_numf(void) const {
 
-        if(debug_==4) std::cout<<__FILE__<<"   "<<__LINE__<<" in radius_numf  "<<std::endl;
-	double Bz(Bznom_);
-	//std::cout<<"Bz: "<<Bz<<std::endl;
-	if (numf_ > 10){
-		double dr    = a()[0];
-		double phi0  = a()[1];
-		double dz    = a()[3];
-		//double phi = fmod(phi0 + M_PI4, M_PI2);
-		double phi = fmod(phi0 + M_PI4*2, M_PI2*2);//yzhang change for multi-turn 2014-05-03 
-		double csf0 = cos(phi);
-		double snf0 = (1. - csf0) * (1. + csf0);
-		snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
-		if(phi > M_PI) snf0 = - snf0;
-		if(phi > M_PI&&debug_) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete   "<<std::endl;
-		//if(phi > M_PI) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete  snf0 "<<snf0<<" snf0_new "<<sin(phi)<<std::endl;
-		snf0 = sin(phi);
-		//XYZPoint
-		HepPoint3D x0((pivot().x() + dr*csf0),
-				(pivot().y() + dr*snf0),
-				(pivot().z() + dz));
+  if(debug_==4) std::cout<<__FILE__<<"   "<<__LINE__<<" in radius_numf  "<<std::endl;
+  double Bz(Bznom_);
+  //std::cout<<"Bz: "<<Bz<<std::endl;
+  if (numf_ > 10){
+    double dr    = a()[0];
+    double phi0  = a()[1];
+    double dz    = a()[3];
+    //double phi = fmod(phi0 + M_PI4, M_PI2);
+    double phi = fmod(phi0 + M_PI4*2, M_PI2*2);//yzhang change for multi-turn 2014-05-03 
+    double csf0 = cos(phi);
+    double snf0 = (1. - csf0) * (1. + csf0);
+    snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
+    if(phi > M_PI) snf0 = - snf0;
+    if(phi > M_PI&&debug_) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete   "<<std::endl;
+    //if(phi > M_PI) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete  snf0 "<<snf0<<" snf0_new "<<sin(phi)<<std::endl;
+    snf0 = sin(phi);
+    //XYZPoint
+    HepPoint3D x0((pivot().x() + dr*csf0),
+	(pivot().y() + dr*snf0),
+	(pivot().z() + dz));
 
-		//XYZVector b;
-		HepVector3D b;
+    //XYZVector b;
+    HepVector3D b;
 
-		//std::cout<<"b: "<<b<<std::endl;
+    //std::cout<<"b: "<<b<<std::endl;
 
-		MFSvc_->fieldVector(10.*x0, b);
+    MFSvc_->fieldVector(10.*x0, b);
 
-		//std::cout<<"b: "<<b<<std::endl;
+    //std::cout<<"b: "<<b<<std::endl;
 
 
-		b = 10000.*b;
-		Bz = b.z();
-	}
-	if (Bz == 0)
-		Bz = Bznom_;
-	double ALPHA_loc = 10000./2.99792458/Bz;
-	return ALPHA_loc / a()[2];
+    b = 10000.*b;
+    Bz = b.z();
+  }
+  if (Bz == 0)
+    Bz = Bznom_;
+  double ALPHA_loc = 10000./2.99792458/Bz;
+  return ALPHA_loc / a()[2];
 }
 
 const HepPoint3D &
 KalFitTrack::pivot_numf(const HepPoint3D & newPivot) {
 
-	int nstep(1);
-	HepPoint3D  delta_x((newPivot-pivot()).x()/double(inner_steps_),
-			(newPivot-pivot()).y()/double(inner_steps_),
-			(newPivot-pivot()).z()/double(inner_steps_));
-	std::cout<<__FILE__<<"   "<<__LINE__<<" delta_x  "<<delta_x<<" pivot "<<pivot()<<" newPivot "<<newPivot<<std::endl;
-	int i = 1;
+  int nstep(1);
+  HepPoint3D  delta_x((newPivot-pivot()).x()/double(inner_steps_),
+      (newPivot-pivot()).y()/double(inner_steps_),
+      (newPivot-pivot()).z()/double(inner_steps_));
+  //std::cout<<__FILE__<<"   "<<__LINE__<<" delta_x  "<<delta_x<<" pivot "<<pivot()<<" newPivot "<<newPivot<<std::endl;
+  int i = 1;
 
-        if (debug_ == 4) std::cout<<__FILE__<<"   "<<__LINE__<<" in pivot_numf "<<newPivot<<" inner_steps_ "<<inner_steps_<<std::endl;
-	while (i <= inner_steps_) {
-		HepPoint3D nextPivot(pivot()+delta_x);
-		double xnp(nextPivot.x()), ynp(nextPivot.y()), znp(nextPivot.z());  
-		HepSymMatrix Ea_now = Ea();
-		HepPoint3D piv(pivot());
-		double xp(piv.x()), yp(piv.y()), zp(piv.z());  
-		double dr    = a()[0];
-		double phi0  = a()[1];
-		double kappa = a()[2];
-		double dz    = a()[3];
-		double tanl  = a()[4];
-		double m_rad(0);
-		if (numfcor_ == 1)
-			m_rad = radius_numf();
-		else
-			m_rad = radius();
-		double rdr = dr + m_rad;
-		double phi = fmod(phi0 + M_PI4, M_PI2);
-		//double phi = fmod(phi0 + M_PI4*2., M_PI2*2.);//yzhang 2014-06-18 
-		double csf0 = cos(phi);
-		double snf0 = (1. - csf0) * (1. + csf0);
-		snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
-		if(phi > M_PI) snf0 = - snf0;
-		//if(phi > M_PI&&debug_) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete   "<<std::endl;
+  if (debug_ == 4) std::cout<<__FILE__<<"   "<<__LINE__<<" in pivot_numf "<<newPivot<<" inner_steps_ "<<inner_steps_<<std::endl;
+  while (i <= inner_steps_) {
+    HepPoint3D nextPivot(pivot()+delta_x);
+    double xnp(nextPivot.x()), ynp(nextPivot.y()), znp(nextPivot.z());  
+    HepSymMatrix Ea_now = Ea();
+    HepPoint3D piv(pivot());
+    double xp(piv.x()), yp(piv.y()), zp(piv.z());  
+    double dr    = a()[0];
+    double phi0  = a()[1];
+    double kappa = a()[2];
+    double dz    = a()[3];
+    double tanl  = a()[4];
+    double m_rad(0);
+    if (numfcor_ == 1)
+      m_rad = radius_numf();
+    else
+      m_rad = radius();
+    double rdr = dr + m_rad;
+    double phi = fmod(phi0 + M_PI4, M_PI2);
+    //double phi = fmod(phi0 + M_PI4*2., M_PI2*2.);//yzhang 2014-06-18 
+    double csf0 = cos(phi);
+    double snf0 = (1. - csf0) * (1. + csf0);
+    snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
+    if(phi > M_PI) snf0 = - snf0;
+    //if(phi > M_PI&&debug_) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete   "<<std::endl;
 
-		double xc = xp + rdr * csf0;
-		double yc = yp + rdr * snf0;
-		double csf = (xc - xnp) / m_rad;
-		double snf = (yc - ynp) / m_rad;
-		double anrm = sqrt(csf * csf + snf * snf);
-		csf /= anrm;
-		snf /= anrm;
-		phi = atan2(snf, csf);
-		double phid = fmod(phi - phi0 + M_PI8, M_PI2);
-		if(phid > M_PI) phid = phid - M_PI2;
-		double drp = (xp + dr * csf0 + m_rad * (csf0 - csf) - xnp)
-			* csf
-			+ (yp + dr * snf0 + m_rad * (snf0 - snf) - ynp) * snf;
-		//std::cout<<__FILE__<<"   "<<__LINE__<<" dzp : zp"<<zp <<" dz "<<dz<<" m_rad "<<m_rad<<" tanl "<<tanl<<" phid "<<phid<<" znp "<<znp<<" phi "<<phi<<" snf "<<snf <<" csf "<<csf<<" xc "<<xc <<" yc "<<yc<<std::endl;//yzhang debug
-		double dzp = zp + dz - m_rad * tanl * phid - znp;
+    double xc = xp + rdr * csf0;
+    double yc = yp + rdr * snf0;
+    double csf = (xc - xnp) / m_rad;
+    double snf = (yc - ynp) / m_rad;
+    double anrm = sqrt(csf * csf + snf * snf);
+    csf /= anrm;
+    snf /= anrm;
+    phi = atan2(snf, csf);
+    double phid = fmod(phi - phi0 + M_PI8, M_PI2);
+    if(phid > M_PI) phid = phid - M_PI2;
+    double drp = (xp + dr * csf0 + m_rad * (csf0 - csf) - xnp)
+      * csf
+      + (yp + dr * snf0 + m_rad * (snf0 - snf) - ynp) * snf;
+    //std::cout<<__FILE__<<"   "<<__LINE__<<" dzp : zp"<<zp <<" dz "<<dz<<" m_rad "<<m_rad<<" tanl "<<tanl<<" phid "<<phid<<" znp "<<znp<<" phi "<<phi<<" snf "<<snf <<" csf "<<csf<<" xc "<<xc <<" yc "<<yc<<std::endl;//yzhang debug
+    double dzp = zp + dz - m_rad * tanl * phid - znp;
 
-		HepVector ap(5);
-		ap[0] = drp;
-		ap[1] = fmod(phi + M_PI4, M_PI2);
-		ap[2] = kappa;
-		ap[3] = dzp;
-		ap[4] = tanl;
+    HepVector ap(5);
+    ap[0] = drp;
+    ap[1] = fmod(phi + M_PI4, M_PI2);
+    ap[2] = kappa;
+    ap[3] = dzp;
+    ap[4] = tanl;
 
-		// Modification due to non uniform magnetic field :
-		if (numf_ > 10) {
+    // Modification due to non uniform magnetic field :
+    if (numf_ > 10) {
 
-			Hep3Vector x1(xp + dr*csf0, yp + dr*snf0, zp + dz);
-			double csf0p = cos(ap[1]);
-			double snf0p = (1. - csf0p) * (1. + csf0p);
-			snf0p = sqrt((snf0p > 0.) ? snf0p : 0.);
-			if(ap[1] > M_PI) snf0p = - snf0p;
+      Hep3Vector x1(xp + dr*csf0, yp + dr*snf0, zp + dz);
+      double csf0p = cos(ap[1]);
+      double snf0p = (1. - csf0p) * (1. + csf0p);
+      snf0p = sqrt((snf0p > 0.) ? snf0p : 0.);
+      if(ap[1] > M_PI) snf0p = - snf0p;
 
-			Hep3Vector x2(xnp + drp*csf0p,
-					ynp + drp*snf0p,
-					znp + dzp);
-			Hep3Vector dist((x1 - x2).x()/100.0,
-					(x1 - x2).y()/100.0,
-					(x1 - x2).z()/100.0);
-			HepPoint3D middlebis((x1.x() + x2.x())/2,
-					(x1.y() + x2.y())/2,
-					(x1.z() + x2.z())/2);
-			HepVector3D field;
-			MFSvc_->fieldVector(10.*middlebis,field); 
-			field = 1000.*field;
-			Hep3Vector dB(field.x(),
-					field.y(),
-					(field.z()-0.1*Bznom_));
-			if (field.z()) {
-				double akappa(fabs(kappa));
-				double sign = kappa/akappa;
-				HepVector dp(3);
-				dp = 0.299792458 * sign * dB.cross(dist);
-				HepVector dhp(3);
-				dhp[0] = -akappa*(dp[0]*csf0p+dp[1]*snf0p);
-				dhp[1] = kappa*akappa*(dp[0]*snf0p-dp[1]*csf0p);
-				dhp[2] = dp[2]*akappa+dhp[1]*tanl/kappa;
-				if (numfcor_ == 0){
-					ap[1] += dhp[0];
-				}
-				ap[2] += dhp[1];
-				ap[4] += dhp[2];
-			}
-		}
-		HepMatrix m_del = delApDelA(ap);
-		Ea_now.assign(m_del * Ea_now * m_del.T());
-		pivot(nextPivot);
-		a(ap);
-		Ea(Ea_now);
-		i++;
+      Hep3Vector x2(xnp + drp*csf0p,
+	  ynp + drp*snf0p,
+	  znp + dzp);
+      Hep3Vector dist((x1 - x2).x()/100.0,
+	  (x1 - x2).y()/100.0,
+	  (x1 - x2).z()/100.0);
+      HepPoint3D middlebis((x1.x() + x2.x())/2,
+	  (x1.y() + x2.y())/2,
+	  (x1.z() + x2.z())/2);
+      HepVector3D field;
+      MFSvc_->fieldVector(10.*middlebis,field); 
+      field = 1000.*field;
+      Hep3Vector dB(field.x(),
+	  field.y(),
+	  (field.z()-0.1*Bznom_));
+      if (field.z()) {
+	double akappa(fabs(kappa));
+	double sign = kappa/akappa;
+	HepVector dp(3);
+	dp = 0.299792458 * sign * dB.cross(dist);
+	HepVector dhp(3);
+	dhp[0] = -akappa*(dp[0]*csf0p+dp[1]*snf0p);
+	dhp[1] = kappa*akappa*(dp[0]*snf0p-dp[1]*csf0p);
+	dhp[2] = dp[2]*akappa+dhp[1]*tanl/kappa;
+	if (numfcor_ == 0){
+	  ap[1] += dhp[0];
 	}
-	return newPivot;
+	ap[2] += dhp[1];
+	ap[4] += dhp[2];
+      }
+    }
+    HepMatrix m_del = delApDelA(ap);
+    Ea_now.assign(m_del * Ea_now * m_del.T());
+    pivot(nextPivot);
+    a(ap);
+    Ea(Ea_now);
+    i++;
+  }
+  return newPivot;
 }
 
 const HepPoint3D &
 KalFitTrack::pivot_numf(const HepPoint3D & newPivot, double & pathl) {
 
   //std::cout<<__FILE__<<"   "<<__LINE__<<" newPivot  "<<newPivot<<std::endl;
-	Helix tracktest = *(Helix*)this;
-	tracktest.ignoreErrorMatrix();
-	double tl  = a()[4];
-	double th = 90.0 - 180.0*M_1_PI*atan( tl );
-	/*
-	   int nstep(1);
-	   if (steplev_ == 1)
-	   nstep = 3;
-	   else if (steplev_ == 2 && (th > 140 || th <45))
-	   if ((pivot()-newPivot).mag()<3.)
-	   nstep = 3;
-	   else
-	   nstep = 6;
-	 */
-	Hep3Vector delta_x((newPivot-pivot()).x()/double(outer_steps_),
-			(newPivot-pivot()).y()/double(outer_steps_),
-			(newPivot-pivot()).z()/double(outer_steps_));
-	int i = 1;
+  Helix tracktest = *(Helix*)this;
+  tracktest.ignoreErrorMatrix();
+  double tl  = a()[4];
+  double th = 90.0 - 180.0*M_1_PI*atan( tl );
+  /*
+     int nstep(1);
+     if (steplev_ == 1)
+     nstep = 3;
+     else if (steplev_ == 2 && (th > 140 || th <45))
+     if ((pivot()-newPivot).mag()<3.)
+     nstep = 3;
+     else
+     nstep = 6;
+   */
+  Hep3Vector delta_x((newPivot-pivot()).x()/double(outer_steps_),
+      (newPivot-pivot()).y()/double(outer_steps_),
+      (newPivot-pivot()).z()/double(outer_steps_));
+  int i = 1;
 
-	while (i <= outer_steps_) {
-		HepPoint3D nextPivot(pivot()+delta_x);
-		double xnp(nextPivot.x()), ynp(nextPivot.y()), znp(nextPivot.z());  
+  while (i <= outer_steps_) {
+    HepPoint3D nextPivot(pivot()+delta_x);
+    double xnp(nextPivot.x()), ynp(nextPivot.y()), znp(nextPivot.z());  
 
-		HepSymMatrix Ea_now = Ea();
-		HepPoint3D piv(pivot());
-		double xp(piv.x()), yp(piv.y()), zp(piv.z());  
+    HepSymMatrix Ea_now = Ea();
+    HepPoint3D piv(pivot());
+    double xp(piv.x()), yp(piv.y()), zp(piv.z());  
 
-		double dr    = a()[0];
-		double phi0  = a()[1];
-		double kappa = a()[2];
-		double dz    = a()[3];
-		double tanl  = a()[4];
+    double dr    = a()[0];
+    double phi0  = a()[1];
+    double kappa = a()[2];
+    double dz    = a()[3];
+    double tanl  = a()[4];
 
-		double m_rad(0);
-		m_rad = radius();
+    double m_rad(0);
+    m_rad = radius();
 
-		double rdr = dr + m_rad;
-		//double phi = fmod(phi0 + M_PI4, M_PI2);
-		double phi = fmod(phi0 + M_PI4*2., M_PI2*2.);//yzhang 2014-06-18 
-		double csf0 = cos(phi);
-		double snf0 = (1. - csf0) * (1. + csf0);
-		snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
-		if(phi > M_PI) snf0 = - snf0;
-		//if(phi > M_PI) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete   "<<std::endl;
+    double rdr = dr + m_rad;
+    //double phi = fmod(phi0 + M_PI4, M_PI2);
+    double phi = fmod(phi0 + M_PI4*2., M_PI2*2.);//yzhang 2014-06-18 
+    double csf0 = cos(phi);
+    double snf0 = (1. - csf0) * (1. + csf0);
+    snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
+    if(phi > M_PI) snf0 = - snf0;
+    //if(phi > M_PI) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete   "<<std::endl;
 
-		double xc = xp + rdr * csf0;
-		double yc = yp + rdr * snf0;
-		double csf = (xc - xnp) / m_rad;
-		double snf = (yc - ynp) / m_rad;
-		double anrm = sqrt(csf * csf + snf * snf);
-		csf /= anrm;
-		snf /= anrm;
-		phi = atan2(snf, csf);
-		double phid = fmod(phi - phi0 + M_PI8, M_PI2);
-		if(phid > M_PI) phid = phid - M_PI2;//yzhang ? 
-		if(phid > M_PI) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phid > M_PI NOT delete   "<<std::endl;
-		double drp = (xp + dr * csf0 + m_rad * (csf0 - csf) - xnp)
-			* csf
-			+ (yp + dr * snf0 + m_rad * (snf0 - snf) - ynp) * snf;
-		double dzp = zp + dz - m_rad * tanl * phid - znp;
-		//std::cout<<__FILE__<<"   "<<__LINE__<<" dzp : zp"<<zp <<" dz "<<dz<<" m_rad "<<m_rad<<" tanl "<<tanl<<" phid "<<phid<<" znp "<<znp<<" phi "<<phi<<" snf "<<snf <<" csf "<<csf<<" xc "<<xc <<" yc "<<yc<<std::endl;
+    double xc = xp + rdr * csf0;
+    double yc = yp + rdr * snf0;
+    double csf = (xc - xnp) / m_rad;
+    double snf = (yc - ynp) / m_rad;
+    double anrm = sqrt(csf * csf + snf * snf);
+    csf /= anrm;
+    snf /= anrm;
+    phi = atan2(snf, csf);
+    double phid = fmod(phi - phi0 + M_PI8, M_PI2);
+    if(phid > M_PI) phid = phid - M_PI2;//yzhang ? 
+    if(phid > M_PI) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phid > M_PI NOT delete   "<<std::endl;
+    double drp = (xp + dr * csf0 + m_rad * (csf0 - csf) - xnp)
+      * csf
+      + (yp + dr * snf0 + m_rad * (snf0 - snf) - ynp) * snf;
+    double dzp = zp + dz - m_rad * tanl * phid - znp;
+    //std::cout<<__FILE__<<"   "<<__LINE__<<" dzp : zp"<<zp <<" dz "<<dz<<" m_rad "<<m_rad<<" tanl "<<tanl<<" phid "<<phid<<" znp "<<znp<<" phi "<<phi<<" snf "<<snf <<" csf "<<csf<<" xc "<<xc <<" yc "<<yc<<std::endl;
 
-		HepVector ap(5);
-		ap[0] = drp;
-		ap[1] = fmod(phi + M_PI4, M_PI2);
-		ap[2] = kappa;
-		ap[3] = dzp;
-		ap[4] = tanl;
+    HepVector ap(5);
+    ap[0] = drp;
+    ap[1] = fmod(phi + M_PI4, M_PI2);
+    ap[2] = kappa;
+    ap[3] = dzp;
+    ap[4] = tanl;
 
-		//std::cout<<" numf_: "<<numf_<<std::endl;
+    //std::cout<<" numf_: "<<numf_<<std::endl;
 
-		// Modification due to non uniform magnetic field :
-		if (numf_ > 10) {
+    // Modification due to non uniform magnetic field :
+    if (numf_ > 10) {
 
-			Hep3Vector x1(xp + dr*csf0, yp + dr*snf0, zp + dz);
+      Hep3Vector x1(xp + dr*csf0, yp + dr*snf0, zp + dz);
 
-			double csf0p = cos(ap[1]);
-			double snf0p = (1. - csf0p) * (1. + csf0p);
-			snf0p = sqrt((snf0p > 0.) ? snf0p : 0.);
-			if(ap[1] > M_PI) snf0p = - snf0p;
+      double csf0p = cos(ap[1]);
+      double snf0p = (1. - csf0p) * (1. + csf0p);
+      snf0p = sqrt((snf0p > 0.) ? snf0p : 0.);
+      if(ap[1] > M_PI) snf0p = - snf0p;
 
-			Hep3Vector x2(xnp + drp*csf0p,
-					ynp + drp*snf0p,
-					znp + dzp);
+      Hep3Vector x2(xnp + drp*csf0p,
+	  ynp + drp*snf0p,
+	  znp + dzp);
 
-			Hep3Vector dist((x1 - x2).x()/100.0,
-					(x1 - x2).y()/100.0,
-					(x1 - x2).z()/100.0);
+      Hep3Vector dist((x1 - x2).x()/100.0,
+	  (x1 - x2).y()/100.0,
+	  (x1 - x2).z()/100.0);
 
-			HepPoint3D middlebis((x1.x() + x2.x())/2,
-					(x1.y() + x2.y())/2,
-					(x1.z() + x2.z())/2);
+      HepPoint3D middlebis((x1.x() + x2.x())/2,
+	  (x1.y() + x2.y())/2,
+	  (x1.z() + x2.z())/2);
 
-			HepVector3D field;
-			MFSvc_->fieldVector(10.*middlebis,field);
-			field = 1000.*field;
+      HepVector3D field;
+      MFSvc_->fieldVector(10.*middlebis,field);
+      field = 1000.*field;
 
-			//std::cout<<"B field: "<<field<<std::endl;
-			Hep3Vector dB(field.x(),
-					field.y(),
-					(field.z()-0.1*Bznom_));
-
-
-			//std::cout<<" dB: "<<dB<<std::endl;
+      //std::cout<<"B field: "<<field<<std::endl;
+      Hep3Vector dB(field.x(),
+	  field.y(),
+	  (field.z()-0.1*Bznom_));
 
 
-			if (field.z()) {
-				double akappa(fabs(kappa));
-				double sign = kappa/akappa;
-				HepVector dp(3);
-				dp = 0.299792458 * sign * dB.cross(dist);
-
-				//std::cout<<"dp: "<<dp<<std::endl;
-
-				HepVector dhp(3);
-				dhp[0] = -akappa*(dp[0]*csf0p+dp[1]*snf0p);
-				dhp[1] = kappa*akappa*(dp[0]*snf0p-dp[1]*csf0p);
-				dhp[2] = dp[2]*akappa+dhp[1]*tanl/kappa;
+      //std::cout<<" dB: "<<dB<<std::endl;
 
 
-				//std::cout<<"dhp: "<<dhp<<std::endl;
+      if (field.z()) {
+	double akappa(fabs(kappa));
+	double sign = kappa/akappa;
+	HepVector dp(3);
+	dp = 0.299792458 * sign * dB.cross(dist);
+
+	//std::cout<<"dp: "<<dp<<std::endl;
+
+	HepVector dhp(3);
+	dhp[0] = -akappa*(dp[0]*csf0p+dp[1]*snf0p);
+	dhp[1] = kappa*akappa*(dp[0]*snf0p-dp[1]*csf0p);
+	dhp[2] = dp[2]*akappa+dhp[1]*tanl/kappa;
 
 
-				ap[1] += dhp[0];
-				ap[2] += dhp[1];
-				ap[4] += dhp[2];
-			}
-		}
-		HepMatrix m_del = delApDelA(ap);
-		Ea_now.assign(m_del * Ea_now * m_del.T());
-		pivot(nextPivot);
-		a(ap);
-		Ea(Ea_now);
-		i++;
+	//std::cout<<"dhp: "<<dhp<<std::endl;
 
-		//std::cout<<" a: "<<a()<<std::endl;
-	}
 
-	// Estimation of the path length :
-	double tanl_0(tracktest.a()[4]);
-	double phi0_0(tracktest.a()[1]);
-	double radius_0(tracktest.radius());
-	tracktest.pivot(newPivot);
+	ap[1] += dhp[0];
+	ap[2] += dhp[1];
+	ap[4] += dhp[2];
+      }
+    }
+    HepMatrix m_del = delApDelA(ap);
+    Ea_now.assign(m_del * Ea_now * m_del.T());
+    pivot(nextPivot);
+    a(ap);
+    Ea(Ea_now);
+    i++;
 
-	double phi0_1 = tracktest.a()[1];
-	if (fabs(phi0_1 - phi0_0) > M_PI) {
-		if (phi0_1 > phi0_0) phi0_1 -= 2 * M_PI;
-		else phi0_0 -= 2 * M_PI;
-	}  
-	if(phi0_1 == phi0_0) phi0_1 = phi0_0 + 1.e-10;
-	pathl = fabs(radius_0 * (phi0_1 - phi0_0)
-			* sqrt(1 + tanl_0 * tanl_0));
-	return newPivot;
+    //std::cout<<" a: "<<a()<<std::endl;
+  }
+
+  // Estimation of the path length :
+  double tanl_0(tracktest.a()[4]);
+  double phi0_0(tracktest.a()[1]);
+  double radius_0(tracktest.radius());
+  tracktest.pivot(newPivot);
+
+  double phi0_1 = tracktest.a()[1];
+  if (fabs(phi0_1 - phi0_0) > M_PI) {
+    if (phi0_1 > phi0_0) phi0_1 -= 2 * M_PI;
+    else phi0_0 -= 2 * M_PI;
+  }  
+  if(phi0_1 == phi0_0) phi0_1 = phi0_0 + 1.e-10;
+  pathl = fabs(radius_0 * (phi0_1 - phi0_0)
+      * sqrt(1 + tanl_0 * tanl_0));
+  return newPivot;
 }
 
 // function to calculate the path length in the layer
@@ -1772,60 +1778,60 @@ Hep3Vector iocand;
 Hep3Vector cell_IO[2];
 double dphi;
 for( int i = 0; i < 2; i++ ){
-	double cos_alpha = m_c_perp*m_c_perp + m_crio[i]*m_crio[i] - rho*rho;
-	cos_alpha = 0.5*cos_alpha/( m_c_perp*m_crio[i] );
-	double Calpha =  acos( cos_alpha );
-	epflag[i] = 0;
-	iocand = m_c_unit;
-	iocand.rotateZ( charge*sign*Calpha );
-	iocand *= m_crio[i];
-	double xx = iocand.x() - x_c;
-	double yy = iocand.y() - y_c;
-	dphi = atan2(yy, xx) - phi0 - M_PI_2*(1+charge);
-	dphi = fmod( dphi + 8.0*M_PI, 2*M_PI );
+  double cos_alpha = m_c_perp*m_c_perp + m_crio[i]*m_crio[i] - rho*rho;
+  cos_alpha = 0.5*cos_alpha/( m_c_perp*m_crio[i] );
+  double Calpha =  acos( cos_alpha );
+  epflag[i] = 0;
+  iocand = m_c_unit;
+  iocand.rotateZ( charge*sign*Calpha );
+  iocand *= m_crio[i];
+  double xx = iocand.x() - x_c;
+  double yy = iocand.y() - y_c;
+  dphi = atan2(yy, xx) - phi0 - M_PI_2*(1+charge);
+  dphi = fmod( dphi + 8.0*M_PI, 2*M_PI );
 
-	if( dphi < phi_io[0] ){
-		dphi += 2*M_PI;
-	}
-	else if( phi_io[1] < dphi ){
-		dphi -= 2*M_PI;
-	}
+  if( dphi < phi_io[0] ){
+    dphi += 2*M_PI;
+  }
+  else if( phi_io[1] < dphi ){
+    dphi -= 2*M_PI;
+  }
 
-	///in the Local Helix case, phi must be small
+  ///in the Local Helix case, phi must be small
 
-	Hep3Vector zvector( 0., 0., z_c-rho*dphi*tanl);
+  Hep3Vector zvector( 0., 0., z_c-rho*dphi*tanl);
 
-	double xcio, ycio, phip;
-	///// z region check active volume is between zb+2. and zf-2. [cm]
-	double delrin = 2.0;
-	if( m_zf-delrin > zvector.z() ){
-		phip = z_c - m_zb + delrin;
-		phip = phip/( rho*tanl );
-		phip = phip + phi0;
-		xcio = x_c - rho*cos( phip );
-		ycio = y_c - rho*sin( phip );
-		cell_IO[i].setX( xcio );
-		cell_IO[i].setY( ycio );
-		cell_IO[i].setZ( m_zb+delrin );
-		epflag[i] = 1;
-	}
-	else if( m_zb+delrin < zvector.z() ){
-		phip = z_c - m_zf-delrin;
-		phip = phip/( rho*tanl );
-		phip = phip + phi0;
-		xcio = x_c - rho*cos( phip );
-		ycio = y_c - rho*sin( phip );
-		cell_IO[i].setX( xcio );
-		cell_IO[i].setY( ycio );
-		cell_IO[i].setZ( m_zf-delrin );
-		epflag[i] = 1;
-	}
-	else{
-		cell_IO[i] = iocand;
-		cell_IO[i] += zvector;
-	}
-	/// for debug
-	if( i == 0 ) phi_in = dphi;
+  double xcio, ycio, phip;
+  ///// z region check active volume is between zb+2. and zf-2. [cm]
+  double delrin = 2.0;
+  if( m_zf-delrin > zvector.z() ){
+    phip = z_c - m_zb + delrin;
+    phip = phip/( rho*tanl );
+    phip = phip + phi0;
+    xcio = x_c - rho*cos( phip );
+    ycio = y_c - rho*sin( phip );
+    cell_IO[i].setX( xcio );
+    cell_IO[i].setY( ycio );
+    cell_IO[i].setZ( m_zb+delrin );
+    epflag[i] = 1;
+  }
+  else if( m_zb+delrin < zvector.z() ){
+    phip = z_c - m_zf-delrin;
+    phip = phip/( rho*tanl );
+    phip = phip + phi0;
+    xcio = x_c - rho*cos( phip );
+    ycio = y_c - rho*sin( phip );
+    cell_IO[i].setX( xcio );
+    cell_IO[i].setY( ycio );
+    cell_IO[i].setZ( m_zf-delrin );
+    epflag[i] = 1;
+  }
+  else{
+    cell_IO[i] = iocand;
+    cell_IO[i] += zvector;
+  }
+  /// for debug
+  if( i == 0 ) phi_in = dphi;
 }
 // path length estimation
 // phi calculation
@@ -1848,39 +1854,39 @@ ch_ltrk = sqrt( ch_ltrk_rp*ch_ltrk_rp + cl.z()*cl.z() );
 ch_theta = cl.theta();
 
 if( ch_theta < theta*0.85 || 1.15*theta < ch_theta)
-	ch_ltrk *= -1; /// miss calculation
+  ch_ltrk *= -1; /// miss calculation
 
 if( epflag[0] == 1 || epflag [1] == 1 )
-	ch_ltrk *= -1;  /// invalid resion for dE/dx or outside of Mdc
+  ch_ltrk *= -1;  /// invalid resion for dE/dx or outside of Mdc
 
-	mom_[layer] = momentum( phi_in );
-	PathL_[layer] = ch_ltrk;
+  mom_[layer] = momentum( phi_in );
+  PathL_[layer] = ch_ltrk;
 #ifdef YDEBUG
-	cout<<"ch_ltrk "<<ch_ltrk<<endl; 
+  cout<<"ch_ltrk "<<ch_ltrk<<endl; 
 #endif
-	return ch_ltrk;
-	}
+  return ch_ltrk;
+  }
 */
 
 
 void KalFitTrack::update_bit(int i){
-	int j(0);
-	if (i < 31){
-		j = (int) pow(2.,i);
-		if (!(pat1_ & j))
-			pat1_ = pat1_ | j;
-	} else if (i < 50) {
-		j = (int) pow(2.,(i-31));
-		if (!(pat2_ & j))
-			pat2_ = pat2_ | j;
-	}
+  int j(0);
+  if (i < 31){
+    j = (int) pow(2.,i);
+    if (!(pat1_ & j))
+      pat1_ = pat1_ | j;
+  } else if (i < 50) {
+    j = (int) pow(2.,(i-31));
+    if (!(pat2_ & j))
+      pat2_ = pat2_ | j;
+  }
 }
 
 int KalFitTrack::nmass(void){  return NMASS;}//yzhang temp test 2014-04-12 
 double KalFitTrack::mass(int i){  return MASS[i];}
 void KalFitTrack::chgmass(int i){
-	mass_=MASS[i];
-	l_mass_=i;
+  mass_=MASS[i];
+  l_mass_=i;
 }
 
 void KalFitTrack::lead(int i){ lead_ = i;}
@@ -1904,405 +1910,54 @@ void KalFitTrack::appendHitsMdc(KalFitHitMdc h){ HitsMdc_.push_back(h);}
 
 double KalFitTrack::update_hits(KalFitHitMdc & HitMdc, int inext, Hep3Vector& meas, int way, double& dchi2out, double& dtrack,double& dtracknew, double& dtdc, int csmflag) {
 
-	double lr = HitMdc.LR();
-	double lrFromRec = HitMdc.rechitptr()->getFlagLR();//yzhang add 2014-05-01 
-	double fi = HitMdc.rechitptr()->getEntra();
-	if(((int) ceil(fi/M_PI))%2==0) lrFromRec *=-1;
-	//std::cout<<__FILE__<<"   "<<__LINE__<<"  fi "<<fi<<" (int)ceil(fi/M_PI)%2 "<<((int)ceil(fi/M_PI))%2<<std::endl;
-	lr = lrFromRec;
-	if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<"  HitMdc.LR() "<<HitMdc.LR()<<" lrFromRec_original "<<HitMdc.rechitptr()->getFlagLR()<<" fi truth "<<fi<<" lr "<<lr<<" LR_ "<<LR_<<std::endl;
-	// For taking the propagation delay into account :
-	const KalFitWire& Wire = HitMdc.wire();
-	int wire_ID = Wire.geoID();
-	int layerid = HitMdc.wire().layer().layerId();
-	//std::cout<<" when in layer: "<<layerid<<std::endl;
-	double entrangle = HitMdc.rechitptr()->getEntra();
-
-	//yzhang delete for CDC 2014-04-10 
-	//if (wire_ID<0 || wire_ID>6796){  //bes
-	//	std::cout << " KalFitTrack: wire_ID problem : " << wire_ID 
-	//		<< std::endl;
-	//	return 0;
-	//} 
-
-	int flag_ster = Wire.stereo();
-	flag_ster = 1;//yzhang for CDC
-	//cout<<"flag_ster = "<<flag_ster<<endl;
-	double x[3] ={pivot().x(), pivot().y(), pivot().z()};
-	double pmom[3] ={momentum().x(), momentum().y(), momentum().z()};
-	double tofest(0);
-	//double phi = fmod(phi0() + M_PI4, M_PI2);//yzhang 2014-04-12 delete for CDC multi-turn
-	double phi = fmod(phi0() + M_PI4*2, M_PI2*2);//yzhang 2014-04-12 delete for CDC multi-turn
-	if(debug_>0){
-	  std::cout<<__FILE__<<"   "<<__LINE__<<" phi0 "<<phi0()<<" phi "<<phi<<std::endl;
-	  if(abs(phi0()-phi)>M_PI2) std::cout<<__FILE__<<"   "<<__LINE__<<" cut phi0! "<<std::endl;
-	}
-	
-	//double phi = phi0();
-	double csf0 = cos(phi);
-	double snf0_new = sin(phi);
-	double snf0 = (1. - csf0) * (1. + csf0);
-	snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
-	if(phi > M_PI) snf0 = - snf0;//yzhang 2014-04-12 delete for CDC full circle
-	if(phi > M_PI) {
-	  if(debug_>0) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug in update_hits  NOT delete phi>pi!!!  phi="<<phi<<std::endl;
-	}
-	if(phi > M_PI&&debug_) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete  snf0 "<<snf0<<" snf0_new "<<snf0_new<<std::endl;
-
-	snf0 = snf0_new;//yzhang 2014-06-18 
-	double testFi = -999.;
-	double testFltLen = -999.;
-	if (Tof_correc_){
-		double t = tanl();
-		double dphi(0);
-
-		Helix work = *(Helix*)this;
-		work.ignoreErrorMatrix();
-		double phi_ip(0);
-		Hep3Vector ip(0, 0, 0);
-		work.pivot(ip);
-		phi_ip = work.phi0();
-		if (fabs(phi - phi_ip) > M_PI) {
-		  //yzhang delete for CDC multi turn 2014-04-12 
-		  if(debug_>0) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug in update_hits  |phi-phi_pi>pi!!! NOT delete phi="<<phi<<std::endl;
-			if (phi > phi_ip) phi -= 2 * M_PI;
-			else phi_ip -= 2 * M_PI;
-		}
-		dphi = phi - phi_ip;
-		double l = fabs(radius() * dphi * sqrt(1 + t * t));
-		if(Tof_correc_fltLenFromRec_) l = HitMdc.rechitptr()->getFltLen();
-		double pmag( sqrt( 1.0 + t*t ) / kappa());
-		double mass_over_p( mass_ / pmag );
-		double beta( 1.0 / sqrt( 1.0 + mass_over_p * mass_over_p ) );
-		tofest = l / ( 29.9792458 * beta );
-		if(csmflag==1 && HitMdc.wire().y()>0.)  tofest= -1. * tofest;
-		if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<" hit ("<<HitMdc.wire().layer().layerId()<<","<< HitMdc.wire().localId()<<" fltLen  "<<l <<" fltlen fromRec "<<HitMdc.rechitptr()->getFltLen()<<" tofest "<<tofest<<" beta "<<beta<<" mass "<<mass_<<" pmag "<<pmag<<" l_mass "<<l_mass_<<" dphi "<<dphi<<" phi "<<phi<<" phi_ip "<<phi_ip<<std::endl;
-		testFi = phi-phi_ip;
-		testFltLen = l;
-	}
-
-	const HepSymMatrix& ea = Ea();
-	//yzhang add 2014-04-15 
-	//HepVector tempA;
-	//for(int i=0;i<5;i++) tempA[i]=a()[i];
-	double fltLen = HitMdc.rechitptr()->getFltLen();
-	double Bz = Bznom_/10.;//yzhang temp
-	double omega = Bz*a()[2]/-333.567;
-	double fiTemp = (1./sqrt(1.+a()[4]*a()[4]))*omega*fltLen;
-	//std::cout<<__FILE__<<"   "<<__LINE__<<"omega "<<omega<<" fltLen "<<fltLen<<" fi  "<<fiTemp<<" Bz "<<Bz<<std::endl;
-	//while(fiTemp<0) fiTemp+=M_PI2;
-	//if(fiTemp>M_PI) {
-	  //tempA[2]=-1.*tempA[2];
-	//}
-	//zhangy
-
-	//if(fiTemp>M_PI) {
-	//  lr *= -1;//yzhang change lr ambigius 2014-04-15 
-	//  if(debug_==4) std::cout<<__FILE__<<"   "<<__LINE__<<" fi>pi "<<fiTemp <<" change lr to "<<lr<<std::endl;
-	//}
-
-	//const HepVector& v_a =tempA;
-	const HepVector& v_a = a();
-	double dchi2R(99999999), dchi2L(99999999);
-
-	HepVector v_H(5, 0);
-	v_H[0] =  -csf0 * meas.x() - snf0 * meas.y();
-	v_H[3] =  -meas.z();
-	HepMatrix v_HT = v_H.T();
-
-	if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<" v_HT  "<<v_HT<<" v_a "<<v_a<<std::endl;
-	double estim = (v_HT * v_a)[0];
-	dtrack = estim;
-	HepVector ea_v_H = ea * v_H;
-	HepMatrix ea_v_HT = (ea_v_H).T();
-	HepVector v_H_T_ea_v_H = v_HT * ea_v_H;
-
-	HepSymMatrix eaNewL(5), eaNewR(5);
-	HepVector aNewL(5), aNewR(5);
-
-	double drifttime = getDriftTime(HitMdc , tofest);
-	double ddl = getDriftDist(HitMdc, drifttime, 0 );
-	double ddr = getDriftDist(HitMdc, drifttime, 1 );
-	double erddl = getSigma( HitMdc, a()[4], 0, ddl);
-	double erddr = getSigma( HitMdc, a()[4], 1, ddr);
-
-	//yzhang add
-	if(m_ntTest){
-	  m_ddLayer = HitMdc.wire().layer().layerId();
-	  m_ddWire = HitMdc.wire().localId();
-	  m_fiRec = HitMdc.rechitptr()->getEntra();
-	  m_fiKal = testFi;
-	  m_ddRec = HitMdc.rechitptr()->getDriftDistRight();
-	  m_ddTruth = HitMdc.rechitptr()->getDriftDistLeft();
-	  m_ddKal = ddr*0.1;
-	  m_ddFiTerm = fiTerm_;
-	  m_ddFltlen = HitMdc.rechitptr()->getFltLen();
-	  m_ddFltlenKal = testFltLen;
-	  m_ddMass = l_mass_;
-	  //std::cout<<__FILE__<<"   "<<__LINE__<<"   "<<std::endl;
-	  m_ntTest->write();
-	}
-	if(debug_ == 4) {
-	  std::cout<<" hit ("<<layerid<<","<< HitMdc.wire().localId()
-	    <<") in update_hits dd_estimated "<<estim<<" ddl="<<ddl/10.<<" erddl "
-	    <<erddl/10. <<" ddr="<<ddr/10.<<" erddr "<<erddr/10. <<" cm "<<" drifttime "<<drifttime
-	    <<"ns lr= " << lr <<" entrangle "<<entrangle<<" fi "<<fiTemp<<std::endl;
-	  //std::cout<<" in update_hits estime is  "<<estim<<std::endl;
-	  //std::cout<<"drifttime in update_hits() for ananlysis is  "<<drifttime<< " ns "<<std::endl;
-	  //std::cout<<"ddl in update_hits() for ananlysis is  "<<ddl/10.<<" cm "<<std::endl;
-	  //std::cout<<"ddr in update_hits() for ananlysis is  "<<ddr/10.<<" cm "<<std::endl;
-	  //std::cout<<"erddl in update_hits() for ananlysis is  "<<erddl/10.<<" cm "<<std::endl;
-	  //std::cout<<"erddr in update_hits() for ananlysis is  "<<erddr/10.<<" cm "<<std::endl;
-	}
-
-	//the following 3 line : tempory
-	double dmeas2[2] = { 0.1*ddl, 0.1*ddr };  // millimeter to centimeter
-	double er_dmeas2[2] = {0.,0.};
-	if(resolflag_ == 1) { 
-	  er_dmeas2[0] = 0.1*erddl;
-	  er_dmeas2[1] = 0.1*erddr;
-	} 
-	else if(resolflag_ == 0) {
-	  //   int layid = HitMdc.wire().layer().layerId();
-	  //   double sigma = getSigma(layid, dd);
-	  //   er_dmeas2[0] = er_dmeas2[1] = sigma;
-	}
-
-	// Left hypothesis :
-	//yzhang 2014-05-01 change
-	if ((LR_==0 )|| 
-	    //if ((LR_==0 && lr != 1.0) || 
-	  (LR_==1 && lr == -1.0)) {
-	    double er_dmeasL, dmeasL;
-	    if(debug_==4) std::cout<<__FILE__<<"   "<<__LINE__<<" dmeas by Kalman dmeas2 "<<dmeas2[0]<< " by Rec "<<fabs(HitMdc.dist()[0])<<std::endl;
-	    if(Tof_correc_) {
-	    if(debug_==4) std::cout<<__FILE__<<"   "<<__LINE__<<" dmeas by Kalman  "<<std::endl;
-	    dmeasL = (-1.0)*fabs(dmeas2[0]);
-	    er_dmeasL = er_dmeas2[0];
-	    } else {
-	    if(debug_==4) std::cout<<__FILE__<<"   "<<__LINE__<<" dmeas by Rec "<<std::endl;
-	    dmeasL = (-1.0)*fabs(HitMdc.dist()[0]);
-	    er_dmeasL = HitMdc.erdist()[0];
-	    }
-	    dtdc = dmeasL;
-	    double AL = 1 / ((v_H_T_ea_v_H)[0] + er_dmeasL*er_dmeasL);
-	    eaNewL.assign(ea - ea_v_H * AL * ea_v_HT);
-	    double RkL = 1 - (v_H_T_ea_v_H)[0] * AL;
-	    if(debug_ == 4){
-	    cout<<"dmeasL, er_dmeasL = "<<dmeasL<<", "<<er_dmeasL<<" estim "<<estim<<endl;
-	    std::cout<<" diffL=ea_v_H * AL * ea_v_HT is: "<<ea_v_H * AL * ea_v_HT<<std::endl;
-	    std::cout<<" v_H is: "<<v_H<<" Ea is: "<<ea<<" v_H_T_ea_v_H is: "<<v_H_T_ea_v_H<<std::endl;
-	    std::cout<<" AL is: "<<AL<<" (v_H_T_ea_v_H)[0] * AL is: "<<(v_H_T_ea_v_H)[0]*AL<<std::endl;
-	    }
-
-	    if(0. == RkL) RkL = 1.e-4;
-
-	    HepVector diffL = ea_v_H * AL * (dmeasL - estim);
-	    aNewL = v_a + diffL;
-	    double sigL = dmeasL -(v_HT * aNewL)[0];
-	    dtracknew = (v_HT * aNewL)[0];
-	    dchi2L = (sigL * sigL)/(RkL * er_dmeasL*er_dmeasL);
-	    if(debug_ == 4){
-	      std::cout<<" fwd_filter : in left hypothesis dchi2L is "<<dchi2L<<std::endl;
-	      cout<<"ea_v_H="<<ea_v_H<<endl;
-	      cout<<"diffL="<<diffL<<endl;
-	    }
-	  }
-
-	if ((LR_==0 ) ||
-	    //if ((LR_==0 && lr != -1.0) ||
-	  (LR_==1 && lr == 1.0)) {
-	    double er_dmeasR, dmeasR;
-	    if(Tof_correc_) {
-	    dmeasR = dmeas2[1];
-	    er_dmeasR = er_dmeas2[1];
-	    } else {
-	    dmeasR = fabs(HitMdc.dist()[1]);
-	    er_dmeasR = HitMdc.erdist()[1];
-	    }
-	    dtdc = dmeasR;
-	    double AR = 1 / ((v_H_T_ea_v_H)[0] + er_dmeasR*er_dmeasR);
-	    eaNewR.assign(ea - ea_v_H * AR * ea_v_HT);
-	    double RkR = 1 - (v_H_T_ea_v_H)[0] * AR;
-
-	    if(debug_ == 4){
-	    cout<<"dmeasR, er_dmeasR = "<<dmeasR<<", "<<er_dmeasR<<" estim "<<estim<<endl;
-	    std::cout<<" diffR=ea_v_H * AR * ea_v_HT is: "<<ea_v_H * AR * ea_v_HT<<std::endl;
-	    std::cout<<" v_H is: "<<v_H<<" Ea is: "<<ea<<" v_H_T_ea_v_H is: "<<v_H_T_ea_v_H<<std::endl;
-	    std::cout<<" AR is: "<<AR<<" (v_H_T_ea_v_H)[0] * AR is: "<<(v_H_T_ea_v_H)[0]*AR<<std::endl;
-	    }
-
-	    if(0. == RkR) RkR = 1.e-4;
-	    HepVector diffR = ea_v_H * AR * (dmeasR - estim);
-	    aNewR = v_a + diffR;
-	    double sigR = dmeasR -(v_HT * aNewR)[0];
-	    dtracknew = (v_HT * aNewR)[0];
-	    dchi2R = (sigR*sigR)/(RkR * er_dmeasR*er_dmeasR);
-	    if(debug_ == 4){
-	      std::cout<<" fwd_filter : in right hypothesis dchi2R is "<<dchi2R<<std::endl;
-	      cout<<"ea_v_H="<<ea_v_H<<endl;
-	      cout<<"diffR="<<diffR<<endl;
-	    }
-	  }
-	// Update Kalman result :
-	double dchi2_loc(0);
-	if (fabs(dchi2R-dchi2L)<10. && inext>0) {
-	  KalFitHitMdc & HitMdc_next = HitsMdc_[inext];
-	  Helix H_fromR(pivot(), aNewR, eaNewR);
-	  double chi2_fromR(chi2_next(H_fromR, HitMdc_next, csmflag));
-	  Helix H_fromL(pivot(), aNewL, eaNewL);
-	  double chi2_fromL(chi2_next(H_fromL, HitMdc_next, csmflag));
-	  //#ifdef YDEBUG
-	  if(debug_==4){
-	    std::cout << "   chi2_fromL = " << chi2_fromL 
-	      << ", chi2_fromR = " << chi2_fromR << std::endl;
-	  }
-	  //#endif
-	  if (fabs(chi2_fromR-chi2_fromL)<10.){
-	    int inext2(-1);
-	    if (inext+1<HitsMdc_.size())
-	      for( int k=inext+1 ; k < HitsMdc_.size(); k++ )
-		if (!(HitsMdc_[k].chi2()<0)) {
-		  inext2 = k;
-		  break;
-		}
-
-	    if (inext2 != -1){
-	      KalFitHitMdc & HitMdc_next2 = HitsMdc_[inext2];
-	      double chi2_fromR2(chi2_next(H_fromR, HitMdc_next2, csmflag));
-	      double chi2_fromL2(chi2_next(H_fromL, HitMdc_next2, csmflag));
-	      //#ifdef YDEBUG
-	      if(debug_==4){
-		std::cout << "   chi2_fromL2 = " << chi2_fromL2 
-		  << ", chi2_fromR2 = " << chi2_fromR2 << std::endl;
-	      }
-	      //#endif
-	      if (fabs(dchi2R+chi2_fromR+chi2_fromR2-(dchi2L+chi2_fromL+chi2_fromL2))<2) {
-		if (chi2_fromR2<chi2_fromL2)
-		  dchi2L = DBL_MAX;
-		else 
-		  dchi2R = DBL_MAX;
-	      }
-	    } 
-	  }
-
-	  if (!(dchi2L == DBL_MAX && dchi2R == DBL_MAX)) {
-	    if (dchi2R+chi2_fromR < dchi2L+chi2_fromL){
-	      dchi2L = DBL_MAX;
-#ifdef YDEBUG
-	      std::cout << " choose right..." << std::endl;
-#endif
-	    } else {
-	      dchi2R = DBL_MAX;
-#ifdef YDEBUG
-	      std::cout << " choose left..." << std::endl;
-#endif
-	    }
-	  }
-	}else{
-	  //yzhang add debug
-	  if(debug_==4){
-	    cout<<" !(fabs(dchi2R-dchi2L)<10. && inext>0) dchi2R="<<dchi2R<<" dchi2L="<<dchi2L<<endl;
-	  }
-	}
-	if ((0 < dchi2R && dchi2R < dchi2cutf_anal[layerid]) ||
-	    (0 < dchi2L && dchi2L < dchi2cutf_anal[layerid])) {
-
-	  //yzhang change 2014-05-01 
-	  if (((LR_==0 && dchi2R < dchi2L )|| 
-		(LR_==1 && lr == 1)) && 
-	      //if (((LR_==0 && dchi2R < dchi2L && lr != -1) || 
-	      //(LR_==1 && lr == 1)) && 
-	    fabs(aNewR[2]-a()[2]) < 1000. && aNewR[2]) {
-	      if(debug_>0)cout << __FILE__<<" "<<__LINE__<<" mass "<<l_mass_<< " arbitrate hit keep hit R ("<<MdcID::layer(HitMdc.rechitptr()->getMdcId())<<","<< MdcID::wire(HitMdc.rechitptr()->getMdcId())<<")"<<" MdcHit.lr="<<lr<<" rec.lr="<<lrFromRec<<" dchi2__ "<<dchi2R<<endl;
-	      if (nchits_ < (unsigned) nmdc_hit2_ || dchi2R < dchi2cutf_anal[layerid]){
-	      nchits_++;
-	      if (flag_ster) nster_++;
-	      Ea(eaNewR);
-	      a(aNewR);
-	      chiSq_ += dchi2R;
-	      dchi2_loc = dchi2R;
-	      if (l_mass_ == lead_){
-	      //HitMdc.LR(1);//yzhang delete 2014-04-15 
-	      }        
-	      update_bit(HitMdc.wire().layer().layerId());
-	      }
-	      } else if (((LR_==0 && dchi2L <= dchi2R ) || 
-		  (LR_==1 && lr == -1)) && 
-		//} else if (((LR_==0 && dchi2L <= dchi2R && lr != 1) || 
-		//(LR_==1 && lr == -1)) && 
-		fabs(aNewL[2]-a()[2]) < 1000. && aNewL[2]){
-		if(debug_>0)cout << __FILE__<<" "<<__LINE__<<" mass "<<l_mass_<< " arbitrate hit keep hit L ("<<MdcID::layer(HitMdc.rechitptr()->getMdcId())<<","<< MdcID::wire(HitMdc.rechitptr()->getMdcId())<<")"<<" MdcHit.lr="<<lr<<" rec.lr="<<lrFromRec<<" dchi2__ "<<dchi2L<<endl;
-		if (nchits_ < (unsigned) nmdc_hit2_ || dchi2L < dchi2cutf_anal[layerid]){
-		nchits_++;
-		if (flag_ster) nster_++;
-		Ea(eaNewL);
-		a(aNewL);
-		chiSq_ += dchi2L;
-		dchi2_loc = dchi2L;
-		if (l_mass_ == lead_){
-		//	HitMdc.LR(-1);//yzhang delete 2014-04-15 
-		}
-		update_bit(HitMdc.wire().layer().layerId());
-		}
-		}
-		}else{
-		if(debug_>0) cout<<__FILE__<<" "<<__LINE__<<" mass "<<l_mass_<<" arbitrate hit ("<< MdcID::layer(HitMdc.rechitptr()->getMdcId())<<","<< MdcID::wire(HitMdc.rechitptr()->getMdcId())<<") drop hit by chi2 cut. dchi2R "<<dchi2R<<" dchi2L "<<dchi2L<<endl; 
-		//yzhang add debug
-		if(debug_ == 4) {
-		  cout<<"NOT (0 < dchi2R && dchi2R < dchi2cutf_anal[layerid]) || (0 < dchi2L && dchi2L < dchi2cutf_anal[layerid])"<<endl;
-		  cout<<"dchi2R="<<dchi2R<<" dchi2L= "<<dchi2L<<" >0? <dchi2cutf_anal?"<<dchi2cutf_anal[layerid]<<endl;
-		}
-		}
-if (dchi2_loc > dchi2_max_) {
-  dchi2_max_ = dchi2_loc ;
-  r_max_ = pivot().perp();
-}
-dchi2out = dchi2_loc;
-//if(dchi2out == 0) {
-//   dchi2out = ( (dchi2L < dchi2R ) ? dchi2L : dchi2R ) ;
-// }
-return chiSq_;
-}
-
-
-double KalFitTrack::update_hits_csmalign(KalFitHelixSeg& HelixSeg, int inext, Hep3Vector& meas,int way, double& dchi2out, int csmflag ) {
-
-
-  HepPoint3D ip(0.,0.,0.);
-
-  KalFitHitMdc* HitMdc = HelixSeg.HitMdc();
-  double lr = HitMdc->LR();
-  int layerid = (*HitMdc).wire().layer().layerId();
-  // cout<<"layerid: "<<layerid<<endl;
-  double entrangle = HitMdc->rechitptr()->getEntra();
-
-  if(debug_ == 4) {
-    std::cout<<"in update_hits(kalFitHelixSeg,...) : the layerid ="<<layerid<<std::endl; 
-    std::cout<<" update_hits: lr= " << lr <<std::endl;
-  }
+  double lr = HitMdc.LR();
+  double lrFromRec = HitMdc.rechitptr()->getFlagLR();//yzhang add 2014-05-01 
+  double fi = HitMdc.rechitptr()->getEntra();
+  if(((int) ceil(fi/M_PI))%2==0) lrFromRec *=-1;
+  //std::cout<<__FILE__<<"   "<<__LINE__<<"  fi "<<fi<<" (int)ceil(fi/M_PI)%2 "<<((int)ceil(fi/M_PI))%2<<std::endl;
+  lr = lrFromRec;
+  if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<"  HitMdc.LR() "<<HitMdc.LR()<<" lrFromRec_original "<<HitMdc.rechitptr()->getFlagLR()<<" fi truth "<<fi<<" lr "<<lr<<" LR_ "<<LR_<<std::endl;
   // For taking the propagation delay into account :
-  const KalFitWire& Wire = HitMdc->wire();
+  const KalFitWire& Wire = HitMdc.wire();
   int wire_ID = Wire.geoID();
+  int layerid = HitMdc.wire().layer().layerId();
+  //std::cout<<" when in layer: "<<layerid<<std::endl;
+  double entrangle = HitMdc.rechitptr()->getEntra();
 
-  //yzhang delte for CDC 2014-04-10 
+  //yzhang delete for CDC 2014-04-10 
   //if (wire_ID<0 || wire_ID>6796){  //bes
   //	std::cout << " KalFitTrack: wire_ID problem : " << wire_ID 
   //		<< std::endl;
   //	return 0;
   //} 
+
   int flag_ster = Wire.stereo();
-  flag_ster = 1;//yzhang add for CDC 2014-04-10 
+  flag_ster = 1;//yzhang for CDC
+  //cout<<"flag_ster = "<<flag_ster<<endl;
   double x[3] ={pivot().x(), pivot().y(), pivot().z()};
   double pmom[3] ={momentum().x(), momentum().y(), momentum().z()};
   double tofest(0);
-  //double phi = fmod(phi0() + M_PI4, M_PI2);
-  double phi = fmod(phi0() + M_PI4*2., M_PI2*2.);//yzhang 2014-06-18 
+  //double phi = fmod(phi0() + M_PI4, M_PI2);//yzhang 2014-04-12 delete for CDC multi-turn
+  double phi = fmod(phi0() + M_PI4*2, M_PI2*2);//yzhang 2014-04-12 delete for CDC multi-turn
+  if(debug_>0){
+    std::cout<<__FILE__<<"   "<<__LINE__<<" phi0 "<<phi0()<<" phi "<<phi<<std::endl;
+    if(abs(phi0()-phi)>M_PI2) std::cout<<__FILE__<<"   "<<__LINE__<<" cut phi0! "<<std::endl;
+  }
+
+  //double phi = phi0();
   double csf0 = cos(phi);
+  double snf0_new = sin(phi);
   double snf0 = (1. - csf0) * (1. + csf0);
   snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
-  if(phi > M_PI) snf0 = - snf0;
-  if(phi > M_PI) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete   "<<std::endl;
+  if(phi > M_PI) snf0 = - snf0;//yzhang 2014-04-12 delete for CDC full circle
+  if(phi > M_PI) {
+    if(debug_>0) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug in update_hits  NOT delete phi>pi!!!  phi="<<phi<<std::endl;
+  }
+  if(phi > M_PI&&debug_) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete  snf0 "<<snf0<<" snf0_new "<<snf0_new<<std::endl;
+
+  snf0 = snf0_new;//yzhang 2014-06-18 
+  double testFi = -999.;
+  double testFltLen = -999.;
   if (Tof_correc_){
     double t = tanl();
     double dphi(0);
@@ -2314,50 +1969,46 @@ double KalFitTrack::update_hits_csmalign(KalFitHelixSeg& HelixSeg, int inext, He
     work.pivot(ip);
     phi_ip = work.phi0();
     if (fabs(phi - phi_ip) > M_PI) {
+      //yzhang delete for CDC multi turn 2014-04-12 
+      if(debug_>0) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug in update_hits  |phi-phi_pi>pi!!! NOT delete phi="<<phi<<std::endl;
       if (phi > phi_ip) phi -= 2 * M_PI;
       else phi_ip -= 2 * M_PI;
     }
     dphi = phi - phi_ip;
-
     double l = fabs(radius() * dphi * sqrt(1 + t * t));
-    if(Tof_correc_fltLenFromRec_) l = HitMdc->rechitptr()->getFltLen();//yzhang add 2014-05-03 
+    if(Tof_correc_fltLenFromRec_) l = HitMdc.rechitptr()->getFltLen();
     double pmag( sqrt( 1.0 + t*t ) / kappa());
     double mass_over_p( mass_ / pmag );
     double beta( 1.0 / sqrt( 1.0 + mass_over_p * mass_over_p ) );
     tofest = l / ( 29.9792458 * beta );
-    if(csmflag==1 && (*HitMdc).wire().y()>0.)  tofest= -1. * tofest;
-    if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<" fltLen  "<<l <<" fltlen fromRec "<<HitMdc->rechitptr()->getFltLen()<<" tofest "<<tofest<<std::endl;
+    if(csmflag==1 && HitMdc.wire().y()>0.)  tofest= -1. * tofest;
+    if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<" hit ("<<HitMdc.wire().layer().layerId()<<","<< HitMdc.wire().localId()<<" fltLen  "<<l <<" fltlen fromRec "<<HitMdc.rechitptr()->getFltLen()<<" tofest "<<tofest<<" beta "<<beta<<" mass "<<mass_<<" pmag "<<pmag<<" l_mass "<<l_mass_<<" dphi "<<dphi<<" phi "<<phi<<" phi_ip "<<phi_ip<<std::endl;
+    testFi = phi-phi_ip;
+    testFltLen = l;
   }
 
   const HepSymMatrix& ea = Ea();
-  HelixSeg.Ea_pre_fwd(ea);
-  HelixSeg.Ea_filt_fwd(ea);
+  //yzhang add 2014-04-15 
+  //HepVector tempA;
+  //for(int i=0;i<5;i++) tempA[i]=a()[i];
+  double fltLen = HitMdc.rechitptr()->getFltLen();
+  double Bz = Bznom_/10.;//yzhang temp
+  double omega = Bz*a()[2]/-333.567;
+  double fiTemp = (1./sqrt(1.+a()[4]*a()[4]))*omega*fltLen;
+  //std::cout<<__FILE__<<"   "<<__LINE__<<"omega "<<omega<<" fltLen "<<fltLen<<" fi  "<<fiTemp<<" Bz "<<Bz<<std::endl;
+  //while(fiTemp<0) fiTemp+=M_PI2;
+  //if(fiTemp>M_PI) {
+  //tempA[2]=-1.*tempA[2];
+  //}
+  //zhangy
 
+  //if(fiTemp>M_PI) {
+  //  lr *= -1;//yzhang change lr ambigius 2014-04-15 
+  //  if(debug_==4) std::cout<<__FILE__<<"   "<<__LINE__<<" fi>pi "<<fiTemp <<" change lr to "<<lr<<std::endl;
+  //}
 
+  //const HepVector& v_a =tempA;
   const HepVector& v_a = a();
-  HelixSeg.a_pre_fwd(v_a);
-  HelixSeg.a_filt_fwd(v_a);
-
-  /*
-
-     HepPoint3D pivot_work = pivot();
-     HepVector a_work = a();
-     HepSymMatrix ea_work = Ea();
-     KalFitTrack helix_work(pivot_work, a_work, ea_work, 0, 0, 0);
-     helix_work.pivot(ip);
-
-     HepVector a_temp = helix_work.a();
-     HepSymMatrix ea_temp = helix_work.Ea();
-
-     HelixSeg.Ea_pre_fwd(ea_temp);	
-     HelixSeg.a_pre_fwd(a_temp);
-
-  // My God, for the protection purpose 
-  HelixSeg.Ea_filt_fwd(ea_temp);
-  HelixSeg.a_filt_fwd(a_temp);
-
-   */
-
   double dchi2R(99999999), dchi2L(99999999);
 
   HepVector v_H(5, 0);
@@ -2365,137 +2016,138 @@ double KalFitTrack::update_hits_csmalign(KalFitHelixSeg& HelixSeg, int inext, He
   v_H[3] =  -meas.z();
   HepMatrix v_HT = v_H.T();
 
+  if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<" v_HT  "<<v_HT<<" v_a "<<v_a<<std::endl;
   double estim = (v_HT * v_a)[0];
+  dtrack = estim;
   HepVector ea_v_H = ea * v_H;
   HepMatrix ea_v_HT = (ea_v_H).T();
   HepVector v_H_T_ea_v_H = v_HT * ea_v_H;
 
   HepSymMatrix eaNewL(5), eaNewR(5);
   HepVector aNewL(5), aNewR(5);
-#ifdef YDEBUG
-  cout<<"phi  "<<phi<<"  snf0 "<<snf0<<"  csf0  "<<csf0<<endl
-    <<"  meas:  "<<meas <<endl;   
-  cout<<"the related matrix:"<<endl;
-  cout<<"v_H  "<<v_H<<endl;
-  cout<<"v_a  "<<v_a<<endl;
-  cout<<"ea  "<<ea<<endl;
-  cout<<"v_H_T_ea_v_H  "<<v_H_T_ea_v_H<<endl;
-  cout<<"LR_= "<< LR_ << "lr= " << lr <<endl;
-#endif
 
-  double time = (*HitMdc).tdc();
-  //  if (Tof_correc_)
-  //  time = time - way*tofest;
+  double drifttime = getDriftTime(HitMdc , tofest);
+  double ddl = getDriftDist(HitMdc, drifttime, 0 );
+  double ddr = getDriftDist(HitMdc, drifttime, 1 );
+  double erddl = getSigma( HitMdc, a()[4], 0, ddl);
+  double erddr = getSigma( HitMdc, a()[4], 1, ddr);
 
-  //  double dd = 1.0e-4 * 40.0 * time;
-  //the following 3 line : tempory
-
-  double drifttime = getDriftTime(*HitMdc , tofest);
-  double ddl = getDriftDist(*HitMdc, drifttime, 0 );
-  double ddr = getDriftDist(*HitMdc, drifttime, 1 );
-  double erddl = getSigma( *HitMdc, a()[4], 0, ddl);
-  double erddr = getSigma( *HitMdc, a()[4], 1, ddr);
-
-  if(debug_ == 4){
-    std::cout<<"the pure drift time is "<<drifttime<<std::endl;
-    std::cout<<"the drift dist left hypothesis is "<<ddl<<std::endl;
-    std::cout<<"the drift dist right hypothesis is "<<ddr<<std::endl;
-    std::cout<<"the error sigma left hypothesis is "<<erddl<<std::endl;
-    std::cout<<"the error sigma right hypothesis is "<<erddr<<std::endl;
+  if(debug_ == 4) {
+    std::cout<<" hit ("<<layerid<<","<< HitMdc.wire().localId()
+      <<") in update_hits dd_estimated "<<estim<<" ddl="<<ddl/10.<<" erddl "
+      <<erddl/10. <<" ddr="<<ddr/10.<<" erddr "<<erddr/10. <<" cm "<<" drifttime "<<drifttime
+      <<"ns lr= " << lr <<" entrangle "<<entrangle<<" fi "<<fiTemp<<std::endl;
+    //std::cout<<" in update_hits estime is  "<<estim<<std::endl;
+    //std::cout<<"drifttime in update_hits() for ananlysis is  "<<drifttime<< " ns "<<std::endl;
+    //std::cout<<"ddl in update_hits() for ananlysis is  "<<ddl/10.<<" cm "<<std::endl;
+    //std::cout<<"ddr in update_hits() for ananlysis is  "<<ddr/10.<<" cm "<<std::endl;
+    //std::cout<<"erddl in update_hits() for ananlysis is  "<<erddl/10.<<" cm "<<std::endl;
+    //std::cout<<"erddr in update_hits() for ananlysis is  "<<erddr/10.<<" cm "<<std::endl;
   }
-  double dmeas2[2] = { 0.1*ddl , 0.1*ddr }; //millimeter to centimeter
-  double er_dmeas2[2] = {0. , 0.} ;
 
+  //the following 3 line : tempory
+  double dmeas2[2] = { 0.1*ddl, 0.1*ddr };  // millimeter to centimeter
+  double er_dmeas2[2] = {0.,0.};
   if(resolflag_ == 1) { 
     er_dmeas2[0] = 0.1*erddl;
     er_dmeas2[1] = 0.1*erddr;
   } 
   else if(resolflag_ == 0) {
-    //   int layid = (*HitMdc).wire().layer().layerId();
+    //   int layid = HitMdc.wire().layer().layerId();
     //   double sigma = getSigma(layid, dd);
     //   er_dmeas2[0] = er_dmeas2[1] = sigma;
   }
 
   // Left hypothesis :
-  if ((LR_==0 && lr != 1.0) || 
+  //yzhang 2014-05-01 change
+  if ((LR_==0 )|| 
+      //if (LR_==0 && lr != 1.0) || 
       (LR_==1 && lr == -1.0)) {
-
-    std::cout<<__FILE__<<"   "<<__LINE__<<" Left hypothesis  "<<std::endl;
     double er_dmeasL, dmeasL;
+    if(debug_==4) std::cout<<__FILE__<<"   "<<__LINE__<<" dmeas by Kalman dmeas2 "<<dmeas2[0]<< " by Rec "<<fabs(HitMdc.dist()[0])<<std::endl;
     if(Tof_correc_) {
+      if(debug_==4) std::cout<<__FILE__<<"   "<<__LINE__<<" dmeas by Kalman  "<<std::endl;
       dmeasL = (-1.0)*fabs(dmeas2[0]);
       er_dmeasL = er_dmeas2[0];
     } else {
-      dmeasL = (-1.0)*fabs((*HitMdc).dist()[0]);
-      er_dmeasL = (*HitMdc).erdist()[0];
+      if(debug_==4) std::cout<<__FILE__<<"   "<<__LINE__<<" dmeas by Rec "<<std::endl;
+      dmeasL = (-1.0)*fabs(HitMdc.dist()[0]);
+      er_dmeasL = HitMdc.erdist()[0];
     }
-
+    dtdc = dmeasL;
     double AL = 1 / ((v_H_T_ea_v_H)[0] + er_dmeasL*er_dmeasL);
     eaNewL.assign(ea - ea_v_H * AL * ea_v_HT);
     double RkL = 1 - (v_H_T_ea_v_H)[0] * AL;
+    if(debug_ == 4){
+      cout<<"dmeasL, er_dmeasL = "<<dmeasL<<", "<<er_dmeasL<<" estim "<<estim<<endl;
+      std::cout<<" diffL=ea_v_H * AL * ea_v_HT is: "<<ea_v_H * AL * ea_v_HT<<std::endl;
+      std::cout<<" v_H is: "<<v_H<<" Ea is: "<<ea<<" v_H_T_ea_v_H is: "<<v_H_T_ea_v_H<<std::endl;
+      std::cout<<" AL is: "<<AL<<" (v_H_T_ea_v_H)[0] * AL is: "<<(v_H_T_ea_v_H)[0]*AL<<std::endl;
+    }
+
     if(0. == RkL) RkL = 1.e-4;
 
     HepVector diffL = ea_v_H * AL * (dmeasL - estim);
-
     aNewL = v_a + diffL;
     double sigL = dmeasL -(v_HT * aNewL)[0];
-    dchi2L = (sigL * sigL) /  (RkL * er_dmeasL*er_dmeasL);
+    dtracknew = (v_HT * aNewL)[0];
+    dchi2L = (sigL * sigL)/(RkL * er_dmeasL*er_dmeasL);
+    if(debug_ == 4){
+      std::cout<<" fwd_filter : in left hypothesis dchi2L is "<<dchi2L<<std::endl;
+      cout<<"ea_v_H="<<ea_v_H<<endl;
+      cout<<"diffL="<<diffL<<endl;
+    }
   }
 
-  if ((LR_==0 && lr != -1.0) ||
+  if ((LR_==0 ) ||
+      //if (LR_==0 && lr != -1.0) ||
       (LR_==1 && lr == 1.0)) {
-
-    std::cout<<__FILE__<<"   "<<__LINE__<<" Right hypothesis  "<<std::endl;
     double er_dmeasR, dmeasR;
     if(Tof_correc_) {
       dmeasR = dmeas2[1];
       er_dmeasR = er_dmeas2[1];
     } else {
-      dmeasR = fabs((*HitMdc).dist()[1]);
-      er_dmeasR = (*HitMdc).erdist()[1];
+      dmeasR = fabs(HitMdc.dist()[1]);
+      er_dmeasR = HitMdc.erdist()[1];
     }
-
+    dtdc = dmeasR;
     double AR = 1 / ((v_H_T_ea_v_H)[0] + er_dmeasR*er_dmeasR);
     eaNewR.assign(ea - ea_v_H * AR * ea_v_HT);
     double RkR = 1 - (v_H_T_ea_v_H)[0] * AR;
+
+    if(debug_ == 4){
+      cout<<"dmeasR, er_dmeasR = "<<dmeasR<<", "<<er_dmeasR<<" estim "<<estim<<endl;
+      std::cout<<" diffR=ea_v_H * AR * ea_v_HT is: "<<ea_v_H * AR * ea_v_HT<<std::endl;
+      std::cout<<" v_H is: "<<v_H<<" Ea is: "<<ea<<" v_H_T_ea_v_H is: "<<v_H_T_ea_v_H<<std::endl;
+      std::cout<<" AR is: "<<AR<<" (v_H_T_ea_v_H)[0] * AR is: "<<(v_H_T_ea_v_H)[0]*AR<<std::endl;
+    }
+
     if(0. == RkR) RkR = 1.e-4;
-
     HepVector diffR = ea_v_H * AR * (dmeasR - estim);
-
     aNewR = v_a + diffR;
     double sigR = dmeasR -(v_HT * aNewR)[0];
-    dchi2R = (sigR*sigR) /  (RkR * er_dmeasR*er_dmeasR);
+    dtracknew = (v_HT * aNewR)[0];
+    dchi2R = (sigR*sigR)/(RkR * er_dmeasR*er_dmeasR);
+    if(debug_ == 4){
+      std::cout<<" fwd_filter : in right hypothesis dchi2R is "<<dchi2R<<std::endl;
+      cout<<"ea_v_H="<<ea_v_H<<endl;
+      cout<<"diffR="<<diffR<<endl;
+    }
   }
-
   // Update Kalman result :
   double dchi2_loc(0);
-
-#ifdef YDEBUG
-  cout<<" track::update_hits......"<<endl;
-  std::cout << "   dchi2R = " << dchi2R << ", dchi2L = " << dchi2L 
-    << "   estimate =  "<<estim<< std::endl;
-  std::cout << "   dmeasR = " << dmeas2[1] 
-    << ", dmeasL = " << (-1.0)*fabs(dmeas2[0]) << ", check HitMdc.ddl = " 
-    << (*HitMdc).dist()[0] << std::endl;
-  std::cout<<"dchi2L : "<<dchi2L<<" ,dchi2R:  "<<dchi2R<<std::endl; 
-#endif
-
-
   if (fabs(dchi2R-dchi2L)<10. && inext>0) {
-
     KalFitHitMdc & HitMdc_next = HitsMdc_[inext];
-
     Helix H_fromR(pivot(), aNewR, eaNewR);
-    double chi2_fromR(chi2_next(H_fromR, HitMdc_next,csmflag));
-    //double chi2_fromR(chi2_next(H_fromR, HitMdc_next));
-
+    double chi2_fromR(chi2_next(H_fromR, HitMdc_next, csmflag));
     Helix H_fromL(pivot(), aNewL, eaNewL);
-    double chi2_fromL(chi2_next(H_fromL, HitMdc_next,csmflag));
-    //double chi2_fromL(chi2_next(H_fromL, HitMdc_next));
-#ifdef YDEBUG
-    std::cout << "   chi2_fromL = " << chi2_fromL 
-      << ", chi2_fromR = " << chi2_fromR << std::endl;
-#endif
+    double chi2_fromL(chi2_next(H_fromL, HitMdc_next, csmflag));
+    //#ifdef YDEBUG
+    if(debug_==4){
+      std::cout << "   chi2_fromL = " << chi2_fromL 
+	<< ", chi2_fromR = " << chi2_fromR << std::endl;
+    }
+    //#endif
     if (fabs(chi2_fromR-chi2_fromL)<10.){
       int inext2(-1);
       if (inext+1<HitsMdc_.size())
@@ -2507,14 +2159,14 @@ double KalFitTrack::update_hits_csmalign(KalFitHelixSeg& HelixSeg, int inext, He
 
       if (inext2 != -1){
 	KalFitHitMdc & HitMdc_next2 = HitsMdc_[inext2];
-	//	double chi2_fromR2(chi2_next(H_fromR, HitMdc_next2));
-	//	double chi2_fromL2(chi2_next(H_fromL, HitMdc_next2));
 	double chi2_fromR2(chi2_next(H_fromR, HitMdc_next2, csmflag));
 	double chi2_fromL2(chi2_next(H_fromL, HitMdc_next2, csmflag));
-#ifdef YDEBUG
-	std::cout << "   chi2_fromL2 = " << chi2_fromL2 
-	  << ", chi2_fromR2 = " << chi2_fromR2 << std::endl;
-#endif
+	//#ifdef YDEBUG
+	if(debug_==4){
+	  std::cout << "   chi2_fromL2 = " << chi2_fromL2 
+	    << ", chi2_fromR2 = " << chi2_fromR2 << std::endl;
+	}
+	//#endif
 	if (fabs(dchi2R+chi2_fromR+chi2_fromR2-(dchi2L+chi2_fromL+chi2_fromL2))<2) {
 	  if (chi2_fromR2<chi2_fromL2)
 	    dchi2L = DBL_MAX;
@@ -2537,448 +2189,116 @@ double KalFitTrack::update_hits_csmalign(KalFitHelixSeg& HelixSeg, int inext, He
 #endif
       }
     }
+  }else{
+    //yzhang add debug
+    if(debug_==4){
+      cout<<" !(fabs(dchi2R-dchi2L)<10. && inext>0) dchi2R="<<dchi2R<<" dchi2L="<<dchi2L<<endl;
+    }
   }
 
-  if ((0 < dchi2R && dchi2R < dchi2cutf_calib[layerid]) ||
-      (0 < dchi2L && dchi2L < dchi2cutf_calib[layerid])) {
+  if ((0 < dchi2R && dchi2R < dchi2cutf_anal[layerid]) ||
+      (0 < dchi2L && dchi2L < dchi2cutf_anal[layerid])) {
 
-    if (((LR_==0 && dchi2R < dchi2L && lr != -1) || 
-	  (LR_==1 && lr == 1)) && 
+    //yzhang change 2014-05-01 
+    if (((LR_==0 && dchi2R < dchi2L )|| (LR_==1 && lr == 1)) && 
+	// ((LR_==0 && dchi2R < dchi2L && lr != -1) || (LR_==1 && lr == 1)) && 
 	fabs(aNewR[2]-a()[2]) < 1000. && aNewR[2]) {
-      cout << __FILE__<<" "<<__LINE__<<" arbitrate hit keep hit R ("<<MdcID::layer(HitMdc->rechitptr()->getMdcId())<<","<< MdcID::wire(HitMdc->rechitptr()->getMdcId())<<")"<<endl;
-      if (nchits_ < (unsigned) nmdc_hit2_ || dchi2R < dchi2cutf_calib[layerid]){
+      if(debug_>0)cout << __FILE__<<" "<<__LINE__<<" mass "<<l_mass_<< " arbitrate hit keep hit R ("<<MdcID::layer(HitMdc.rechitptr()->getMdcId())<<","<< MdcID::wire(HitMdc.rechitptr()->getMdcId())<<")"<<" MdcHit.lr="<<lr<<" rec.lr="<<lrFromRec<<" dchi2__ "<<dchi2R<<endl;
+      if (nchits_ < (unsigned) nmdc_hit2_ || dchi2R < dchi2cutf_anal[layerid]){
 	nchits_++;
 	if (flag_ster) nster_++;
-	if(layerid>19){  
-	  Ea(eaNewR);
-	  HelixSeg.Ea_filt_fwd(eaNewR);
-	  a(aNewR);
-	  HelixSeg.a_filt_fwd(aNewR);
-	}         
-	/*
-	   Ea(eaNewR);
-	   a(aNewR);
-
-	   KalFitTrack helixR(pivot_work, aNewR, eaNewR, 0, 0, 0);
-	   helixR.pivot(ip);
-
-	   a_temp = helixR.a();
-	   ea_temp = helixR.Ea();
-
-	   HelixSeg.Ea_filt_fwd(ea_temp);
-	   HelixSeg.a_filt_fwd(a_temp);
-	//HelixSeg.filt_include(1);
-
-	 */
-
-	chiSq_ += dchi2R;
-	dchi2_loc = dchi2R;
-	if (l_mass_ == lead_){
-	  (*HitMdc).LR(1);
-	  HelixSeg.LR(1);
-	}        
-	update_bit((*HitMdc).wire().layer().layerId());
-      }
-    } else if (((LR_==0 && dchi2L <= dchi2R && lr != 1) || 
-	  (LR_==1 && lr == -1)) && 
-	fabs(aNewL[2]-a()[2]) < 1000. && aNewL[2]){
-      cout << __FILE__<<" "<<__LINE__<<" arbitrate hit keep hit L ("<<MdcID::layer(HitMdc->rechitptr()->getMdcId())<<","<< MdcID::wire(HitMdc->rechitptr()->getMdcId())<<")"<<endl;
-      if (nchits_ < (unsigned) nmdc_hit2_ || dchi2L < dchi2cutf_calib[layerid]){
-	nchits_++;
-	if (flag_ster) nster_++;
-	if(layerid>19){
-	  Ea(eaNewL);
-	  HelixSeg.Ea_filt_fwd(eaNewL);
-	  a(aNewL);
-	  HelixSeg.a_filt_fwd(aNewL);
-	}
-
-	/* 
-	   Ea(eaNewL);
-	   a(aNewL);
-
-	   KalFitTrack helixL(pivot_work, aNewL, eaNewL, 0, 0, 0);
-	   helixL.pivot(ip);
-	   a_temp = helixL.a();
-	   ea_temp = helixL.Ea();
-	   HelixSeg.Ea_filt_fwd(ea_temp);
-	   HelixSeg.a_filt_fwd(a_temp);
-	//HelixSeg.filt_include(1);
-
-	 */
-
-	chiSq_ += dchi2L;
-	dchi2_loc = dchi2L;
-	if (l_mass_ == lead_){
-	  (*HitMdc).LR(-1);
-	  HelixSeg.LR(-1);
-	}
-	update_bit((*HitMdc).wire().layer().layerId());
-      }
-    }
-  }
-
-  if (dchi2_loc > dchi2_max_) {
-    dchi2_max_ = dchi2_loc ;
-    r_max_ = pivot().perp();
-  }
-  dchi2out = dchi2_loc;
-  //  if(dchi2out == 0) {
-  //     dchi2out = ( (dchi2L < dchi2R ) ? dchi2L : dchi2R ) ;
-  //  }
-  return chiSq_;
-}
-
-
-double KalFitTrack::update_hits(KalFitHelixSeg& HelixSeg, int inext, Hep3Vector& meas,int way, double& dchi2out, int csmflag) {
-
-
-  HepPoint3D ip(0.,0.,0.);
-
-  KalFitHitMdc* HitMdc = HelixSeg.HitMdc();
-  double lr = HitMdc->LR();
-  int layerid = (*HitMdc).wire().layer().layerId();
-  double entrangle = HitMdc->rechitptr()->getEntra();
-
-  if(debug_ == 4) {
-    std::cout<<"in update_hits(kalFitHelixSeg,...) : the layerid ="<<layerid<<std::endl; 
-    std::cout<<" update_hits: lr= " << lr <<std::endl;
-  }
-  // For taking the propagation delay into account :
-  const KalFitWire& Wire = HitMdc->wire();
-  int wire_ID = Wire.geoID();
-
-  //yzhang delte for CDC 2014-04-10 
-  //if (wire_ID<0 || wire_ID>6796){  //bes
-  //	std::cout << " KalFitTrack: wire_ID problem : " << wire_ID 
-  //		<< std::endl;
-  //	return 0;
-  //} 
-  int flag_ster = Wire.stereo();
-  flag_ster = 1;//yzhang add for CDC 2014-04-10 
-  double x[3] ={pivot().x(), pivot().y(), pivot().z()};
-  double pmom[3] ={momentum().x(), momentum().y(), momentum().z()};
-  double tofest(0);
-  //double phi = fmod(phi0() + M_PI4, M_PI2);
-  double phi = fmod(phi0() + M_PI4*2., M_PI2*2.);//yzhang 2014-06-18 
-  double csf0 = cos(phi);
-  double snf0 = (1. - csf0) * (1. + csf0);
-  snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
-  if(phi > M_PI) snf0 = - snf0;
-  if(phi > M_PI) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete   "<<std::endl;
-  if (Tof_correc_){
-    double t = tanl();
-    double dphi(0);
-
-    Helix work = *(Helix*)this;
-    work.ignoreErrorMatrix();
-    double phi_ip(0);
-    Hep3Vector ip(0, 0, 0);
-    work.pivot(ip);
-    phi_ip = work.phi0();
-    if (fabs(phi - phi_ip) > M_PI) {
-      if (phi > phi_ip) phi -= 2 * M_PI;
-      else phi_ip -= 2 * M_PI;
-    }
-    dphi = phi - phi_ip;
-
-    double l = fabs(radius() * dphi * sqrt(1 + t * t));
-    if(Tof_correc_fltLenFromRec_) l = HitMdc->rechitptr()->getFltLen();//yzhang add 2014-05-03 
-    double pmag( sqrt( 1.0 + t*t ) / kappa());
-    double mass_over_p( mass_ / pmag );
-    double beta( 1.0 / sqrt( 1.0 + mass_over_p * mass_over_p ) );
-    tofest = l / ( 29.9792458 * beta );
-    if(csmflag==1 && (*HitMdc).wire().y()>0.)  tofest= -1. * tofest;
-    if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<" fltLen  "<<l <<" fltlen fromRec "<<HitMdc->rechitptr()->getFltLen()<<" tofest "<<tofest<<std::endl;
-  }
-
-  const HepSymMatrix& ea = Ea();
-  HelixSeg.Ea_pre_fwd(ea);
-  HelixSeg.Ea_filt_fwd(ea);
-
-
-  const HepVector& v_a = a();
-  HelixSeg.a_pre_fwd(v_a);
-  HelixSeg.a_filt_fwd(v_a);
-
-  /*
-
-     HepPoint3D pivot_work = pivot();
-     HepVector a_work = a();
-     HepSymMatrix ea_work = Ea();
-     KalFitTrack helix_work(pivot_work, a_work, ea_work, 0, 0, 0);
-     helix_work.pivot(ip);
-
-     HepVector a_temp = helix_work.a();
-     HepSymMatrix ea_temp = helix_work.Ea();
-
-     HelixSeg.Ea_pre_fwd(ea_temp);	
-     HelixSeg.a_pre_fwd(a_temp);
-
-  // My God, for the protection purpose 
-  HelixSeg.Ea_filt_fwd(ea_temp);
-  HelixSeg.a_filt_fwd(a_temp);
-
-   */
-
-
-  double dchi2R(99999999), dchi2L(99999999);
-
-  HepVector v_H(5, 0);
-  v_H[0] =  -csf0 * meas.x() - snf0 * meas.y();
-  v_H[3] =  -meas.z();
-  HepMatrix v_HT = v_H.T();
-
-  double estim = (v_HT * v_a)[0];
-  HepVector ea_v_H = ea * v_H;
-  HepMatrix ea_v_HT = (ea_v_H).T();
-  HepVector v_H_T_ea_v_H = v_HT * ea_v_H;
-
-  HepSymMatrix eaNewL(5), eaNewR(5);
-  HepVector aNewL(5), aNewR(5);
-#ifdef YDEBUG
-  cout<<"phi  "<<phi<<"  snf0 "<<snf0<<"  csf0  "<<csf0<<endl
-    <<"  meas:  "<<meas <<endl;   
-  cout<<"the related matrix:"<<endl;
-  cout<<"v_H  "<<v_H<<endl;
-  cout<<"v_a  "<<v_a<<endl;
-  cout<<"ea  "<<ea<<endl;
-  cout<<"v_H_T_ea_v_H  "<<v_H_T_ea_v_H<<endl;
-  cout<<"LR_= "<< LR_ << "lr= " << lr <<endl;
-#endif
-
-  double time = (*HitMdc).tdc();
-  //  if (Tof_correc_)
-  //  time = time - way*tofest;
-
-  //  double dd = 1.0e-4 * 40.0 * time;
-  //the following 3 line : tempory
-
-  double drifttime = getDriftTime(*HitMdc , tofest);
-  double ddl = getDriftDist(*HitMdc, drifttime, 0 );
-  double ddr = getDriftDist(*HitMdc, drifttime, 1 );
-  double erddl = getSigma( *HitMdc, a()[4], 0, ddl);
-  double erddr = getSigma( *HitMdc, a()[4], 1, ddr);
-
-  if(debug_ == 4){
-    std::cout<<"the pure drift time is "<<drifttime<<std::endl;
-    std::cout<<"the drift dist left hypothesis is "<<ddl<<std::endl;
-    std::cout<<"the drift dist right hypothesis is "<<ddr<<std::endl;
-    std::cout<<"the error sigma left hypothesis is "<<erddl<<std::endl;
-    std::cout<<"the error sigma right hypothesis is "<<erddr<<std::endl;
-  }
-  double dmeas2[2] = { 0.1*ddl , 0.1*ddr }; //millimeter to centimeter
-  double er_dmeas2[2] = {0. , 0.} ;
-
-  if(resolflag_ == 1) { 
-    er_dmeas2[0] = 0.1*erddl;
-    er_dmeas2[1] = 0.1*erddr;
-  } 
-  else if(resolflag_ == 0) {
-    //   int layid = (*HitMdc).wire().layer().layerId();
-    //   double sigma = getSigma(layid, dd);
-    //   er_dmeas2[0] = er_dmeas2[1] = sigma;
-  }
-
-  // Left hypothesis :
-  if ((LR_==0 && lr != 1.0) || 
-      (LR_==1 && lr == -1.0)) {
-
-    double er_dmeasL, dmeasL;
-    if(Tof_correc_) {
-      dmeasL = (-1.0)*fabs(dmeas2[0]);
-      er_dmeasL = er_dmeas2[0];
-    } else {
-      dmeasL = (-1.0)*fabs((*HitMdc).dist()[0]);
-      er_dmeasL = (*HitMdc).erdist()[0];
-    }
-
-    double AL = 1 / ((v_H_T_ea_v_H)[0] + er_dmeasL*er_dmeasL);
-    eaNewL.assign(ea - ea_v_H * AL * ea_v_HT);
-    double RkL = 1 - (v_H_T_ea_v_H)[0] * AL;
-    if(0. == RkL) RkL = 1.e-4;
-
-    HepVector diffL = ea_v_H * AL * (dmeasL - estim);
-
-    aNewL = v_a + diffL;
-    double sigL = dmeasL -(v_HT * aNewL)[0];
-    dchi2L = (sigL * sigL) /  (RkL * er_dmeasL*er_dmeasL);
-  }
-
-  if ((LR_==0 && lr != -1.0) ||
-      (LR_==1 && lr == 1.0)) {
-
-    double er_dmeasR, dmeasR;
-    if(Tof_correc_) {
-      dmeasR = dmeas2[1];
-      er_dmeasR = er_dmeas2[1];
-    } else {
-      dmeasR = fabs((*HitMdc).dist()[1]);
-      er_dmeasR = (*HitMdc).erdist()[1];
-    }
-
-    double AR = 1 / ((v_H_T_ea_v_H)[0] + er_dmeasR*er_dmeasR);
-    eaNewR.assign(ea - ea_v_H * AR * ea_v_HT);
-    double RkR = 1 - (v_H_T_ea_v_H)[0] * AR;
-    if(0. == RkR) RkR = 1.e-4;
-
-    HepVector diffR = ea_v_H * AR * (dmeasR - estim);
-
-    aNewR = v_a + diffR;
-    double sigR = dmeasR -(v_HT * aNewR)[0];
-    dchi2R = (sigR*sigR) /  (RkR * er_dmeasR*er_dmeasR);
-  }
-
-  // Update Kalman result :
-  double dchi2_loc(0);
-
-#ifdef YDEBUG
-  cout<<" track::update_hits......"<<endl;
-  std::cout << "   dchi2R = " << dchi2R << ", dchi2L = " << dchi2L 
-    << "   estimate =  "<<estim<< std::endl;
-  std::cout << "   dmeasR = " << dmeas2[1] 
-    << ", dmeasL = " << (-1.0)*fabs(dmeas2[0]) << ", check HitMdc.ddl = " 
-    << (*HitMdc).dist()[0] << std::endl;
-#endif
-
-  if (fabs(dchi2R-dchi2L)<10. && inext>0) {
-
-    KalFitHitMdc & HitMdc_next = HitsMdc_[inext];
-
-    Helix H_fromR(pivot(), aNewR, eaNewR);
-    double chi2_fromR(chi2_next(H_fromR, HitMdc_next,csmflag));
-
-    Helix H_fromL(pivot(), aNewL, eaNewL);
-    double chi2_fromL(chi2_next(H_fromL, HitMdc_next,csmflag));
-#ifdef YDEBUG
-    std::cout << "   chi2_fromL = " << chi2_fromL 
-      << ", chi2_fromR = " << chi2_fromR << std::endl;
-#endif
-    if (fabs(chi2_fromR-chi2_fromL)<10.){
-      int inext2(-1);
-      if (inext+1<HitsMdc_.size())
-	for( int k=inext+1 ; k < HitsMdc_.size(); k++ )
-	  if (!(HitsMdc_[k].chi2()<0)) {
-	    inext2 = k;
-	    break;
-	  }
-
-      if (inext2 != -1){
-	KalFitHitMdc & HitMdc_next2 = HitsMdc_[inext2];
-	double chi2_fromR2(chi2_next(H_fromR, HitMdc_next2, csmflag));
-	double chi2_fromL2(chi2_next(H_fromL, HitMdc_next2, csmflag));
-#ifdef YDEBUG
-	std::cout << "   chi2_fromL2 = " << chi2_fromL2 
-	  << ", chi2_fromR2 = " << chi2_fromR2 << std::endl;
-#endif
-	if (fabs(dchi2R+chi2_fromR+chi2_fromR2-(dchi2L+chi2_fromL+chi2_fromL2))<2) {
-	  if (chi2_fromR2<chi2_fromL2)
-	    dchi2L = DBL_MAX;
-	  else 
-	    dchi2R = DBL_MAX;
-	}
-      } 
-    }
-
-    if (!(dchi2L == DBL_MAX && dchi2R == DBL_MAX)) {
-      if (dchi2R+chi2_fromR < dchi2L+chi2_fromL){
-	dchi2L = DBL_MAX;
-#ifdef YDEBUG
-	std::cout << " choose right..." << std::endl;
-#endif
-      } else {
-	dchi2R = DBL_MAX;
-#ifdef YDEBUG
-	std::cout << " choose left..." << std::endl;
-#endif
-      }
-    }
-  }
-
-  if ((0 < dchi2R && dchi2R < dchi2cutf_calib[layerid]) ||
-      (0 < dchi2L && dchi2L < dchi2cutf_calib[layerid])) {
-
-    if (((LR_==0 && dchi2R < dchi2L && lr != -1) || 
-	  (LR_==1 && lr == 1)) && 
-	fabs(aNewR[2]-a()[2]) < 1000. && aNewR[2]) {
-      if (nchits_ < (unsigned) nmdc_hit2_ || dchi2R < dchi2cutf_calib[layerid]){
-	nchits_++;
-	if (flag_ster) nster_++;
-
 	Ea(eaNewR);
-	HelixSeg.Ea_filt_fwd(eaNewR);
 	a(aNewR);
-	HelixSeg.a_filt_fwd(aNewR);
-
-	/*
-	   Ea(eaNewR);
-	   a(aNewR);
-
-	   KalFitTrack helixR(pivot_work, aNewR, eaNewR, 0, 0, 0);
-	   helixR.pivot(ip);
-
-	   a_temp = helixR.a();
-	   ea_temp = helixR.Ea();
-
-	   HelixSeg.Ea_filt_fwd(ea_temp);
-	   HelixSeg.a_filt_fwd(a_temp);
-	//HelixSeg.filt_include(1);
-
-	 */
-
 	chiSq_ += dchi2R;
 	dchi2_loc = dchi2R;
 	if (l_mass_ == lead_){
-	  (*HitMdc).LR(1);
-	  HelixSeg.LR(1);
+	  //HitMdc.LR(1);//yzhang delete 2014-04-15 
 	}        
-	update_bit((*HitMdc).wire().layer().layerId());
+	update_bit(HitMdc.wire().layer().layerId());
       }
-    } else if (((LR_==0 && dchi2L <= dchi2R && lr != 1) || 
+    } else if (((LR_==0 && dchi2L <= dchi2R ) || 
 	  (LR_==1 && lr == -1)) && 
+	// else if ((LR_==0 && dchi2L <= dchi2R && lr != 1) || 
+	//(LR_==1 && lr == -1)) && 
 	fabs(aNewL[2]-a()[2]) < 1000. && aNewL[2]){
-      if (nchits_ < (unsigned) nmdc_hit2_ || dchi2L < dchi2cutf_calib[layerid]){
+      if(debug_>0)cout << __FILE__<<" "<<__LINE__<<" mass "<<l_mass_<< " arbitrate hit keep hit L ("<<MdcID::layer(HitMdc.rechitptr()->getMdcId())<<","<< MdcID::wire(HitMdc.rechitptr()->getMdcId())<<")"<<" MdcHit.lr="<<lr<<" rec.lr="<<lrFromRec<<" dchi2__ "<<dchi2L<<endl;
+      if (nchits_ < (unsigned) nmdc_hit2_ || dchi2L < dchi2cutf_anal[layerid]){
 	nchits_++;
 	if (flag_ster) nster_++;
 	Ea(eaNewL);
-	HelixSeg.Ea_filt_fwd(eaNewL);
 	a(aNewL);
-	HelixSeg.a_filt_fwd(aNewL);
-
-
-	/* 
-	   Ea(eaNewL);
-	   a(aNewL);
-
-	   KalFitTrack helixL(pivot_work, aNewL, eaNewL, 0, 0, 0);
-	   helixL.pivot(ip);
-	   a_temp = helixL.a();
-	   ea_temp = helixL.Ea();
-	   HelixSeg.Ea_filt_fwd(ea_temp);
-	   HelixSeg.a_filt_fwd(a_temp);
-	//HelixSeg.filt_include(1);
-
-	 */
-
 	chiSq_ += dchi2L;
 	dchi2_loc = dchi2L;
 	if (l_mass_ == lead_){
-	  (*HitMdc).LR(-1);
-	  HelixSeg.LR(-1);
+	  //	HitMdc.LR(-1);//yzhang delete 2014-04-15 
 	}
-	update_bit((*HitMdc).wire().layer().layerId());
+	update_bit(HitMdc.wire().layer().layerId());
       }
     }
+  }else{
+    if(debug_>0) cout<<__FILE__<<" "<<__LINE__<<" mass "<<l_mass_<<" arbitrate hit ("<< MdcID::layer(HitMdc.rechitptr()->getMdcId())<<","<< MdcID::wire(HitMdc.rechitptr()->getMdcId())<<") drop hit by chi2 cut. dchi2R "<<dchi2R<<" dchi2L "<<dchi2L<<endl; 
+    //yzhang add debug
+    if(debug_ == 4) {
+      cout<<"NOT (0 < dchi2R && dchi2R < dchi2cutf_anal[layerid]) || (0 < dchi2L && dchi2L < dchi2cutf_anal[layerid])"<<endl;
+      cout<<"dchi2R="<<dchi2R<<" dchi2L= "<<dchi2L<<" >0? <dchi2cutf_anal?"<<dchi2cutf_anal[layerid]<<endl;
+    }
   }
-
   if (dchi2_loc > dchi2_max_) {
     dchi2_max_ = dchi2_loc ;
     r_max_ = pivot().perp();
   }
   dchi2out = dchi2_loc;
-  //  if(dchi2out == 0) {
-  //     dchi2out = ( (dchi2L < dchi2R ) ? dchi2L : dchi2R ) ;
-  //  }
+  //if(dchi2out == 0) {
+  //   dchi2out = ( (dchi2L < dchi2R ) ? dchi2L : dchi2R ) ;
+  // }
+
+  //yzhang add
+  if(m_ntTest){
+    m_ddLayer = HitMdc.wire().layer().layerId();
+    m_ddWire = HitMdc.wire().localId();
+    m_fiRec = HitMdc.rechitptr()->getEntra();
+    m_fiKal = testFi;
+    m_ddRec = HitMdc.rechitptr()->getDriftDistRight();
+    m_ddTruth = HitMdc.rechitptr()->getDriftDistLeft();
+    m_ddKal = ddr*0.1;
+    m_ddFiTerm = fiTerm_;
+    m_ddFltLenTerm = fltLenTerm_;
+    double fltLen = HitMdc.rechitptr()->getFltLen();
+    m_ddFltlen = fltLen;
+    m_ddFltlenKal = testFltLen;
+    m_dchi2R = dchi2R;
+    m_dchi2L = dchi2L;
+    double dchi2min = dchi2R;
+    if(dchi2L<dchi2min) dchi2min = dchi2L;
+    m_dchi2min = dchi2min;
+    int iTurn = 1;
+    if(fltLen>M_PI2*fabs(radius())) iTurn = 2;
+    //std::cout<<__FILE__<<"   "<<__LINE__<<" fltLen  "<<fltLen<<" radius()*2pi "<<M_PI2*radius()<<std::endl;
+    m_iTurn = iTurn; 
+    m_iFit = inext;
+    m_ddMass = l_mass_;
+    m_chi2Sum = chiSq_;
+    m_chi2Add = dchi2_loc;
+
+    double phi0 = a()[1];
+    double pxy = fabs(1./a()[2]);
+    double tanl = a()[4];
+    double px = pxy * (-sin(phi0));
+    double py = pxy * cos(phi0);
+    double pz = pxy * tanl;
+    double pCurrent = sqrt(px*px+py*py+pz*pz);
+    double dp = pCurrent - HitMdc.pTruth()/1000.;
+    m_dp = dp;
+    if(inext==0) g_lastdp = dp;
+    m_lastdp = g_lastdp;
+    g_lastdp = dp;
+    m_pCurrent = pCurrent;
+    m_pTruthCurrent = HitMdc.pTruth()/1000.;
+    if(debug_>0)std::cout<<__FILE__<<"   "<<__LINE__<<" pCurrent  "<<pCurrent<<" pTruth "<<HitMdc.pTruth()/1000.<<std::endl;
+    //std::cout<<__FILE__<<"   "<<__LINE__<<" inext "<<inext<<" chi2 "<<dchi2min<<std::endl;
+    m_ntTest->write();
+  }
+
   return chiSq_;
 }
 

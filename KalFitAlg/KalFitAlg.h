@@ -46,6 +46,7 @@ class Bfield;
 #include "CLHEP/Vector/ThreeVector.h"
 #include "G4Material.hh"
 #include "G4Tubs.hh"
+#include "MdcPrintSvc/MdcPrintSvc.h"
 
 #ifndef ENABLE_BACKWARDS_COMPATIBILITY
 typedef HepGeom::Point3D <double > HepPoint3D;
@@ -105,7 +106,7 @@ class KalFitAlg : public Algorithm {
     void start_seed(KalFitTrack& track, int lead_, int way, MdcRec_trk& trk);
 
     /// Kalman filter (smoothing or backward part)
-    void smoother_anal(KalFitTrack& trk, int way);
+    //void smoother_anal(KalFitTrack& trk, int way);
     //void smoother_calib(KalFitTrack& trk, int way);
 
     /// Take the inner walls (eloss and mult scat) into account
@@ -114,18 +115,16 @@ class KalFitAlg : public Algorithm {
     /// with results got at the inner Mdc hit 
     void fillTds(MdcRec_trk& TrasanTRK, KalFitTrack& track, 
 	RecMdcKalTrack* trk,int l_mass);
-    void fillTds_lead(MdcRec_trk& TrasanTRK, KalFitTrack& track, 
-	RecMdcKalTrack* trk, int l_mass);
-    ///  with results got at the outer Mdc hit
-    void fillTds_back(KalFitTrack& track, RecMdcKalTrack* trk,
-	MdcRec_trk& TrasanTRK,int l_mass );
-
-    void fillTds_back(KalFitTrack& track, RecMdcKalTrack* trk, 
-	MdcRec_trk& TrasanTRK,int l_mass,RecMdcKalHelixSegCol*  segcol);
-
-    ///for smoother process
-    void fillTds_back(KalFitTrack& track, RecMdcKalTrack* trk, 
-	MdcRec_trk& TrasanTRK,int l_mass,RecMdcKalHelixSegCol*  segcol, int smoothflag);
+    //    ///  with results got at the outer Mdc hit
+    //    void fillTds_back(KalFitTrack& track, RecMdcKalTrack* trk,
+    //	MdcRec_trk& TrasanTRK,int l_mass );
+    //
+    //    void fillTds_back(KalFitTrack& track, RecMdcKalTrack* trk, 
+    //	MdcRec_trk& TrasanTRK,int l_mass,RecMdcKalHelixSegCol*  segcol);
+    //
+    //    ///for smoother process
+    //    void fillTds_back(KalFitTrack& track, RecMdcKalTrack* trk, 
+    //	MdcRec_trk& TrasanTRK,int l_mass,RecMdcKalHelixSegCol*  segcol, int smoothflag);
     ///  with results got at (0,0,0) 
     void fillTds_ip(MdcRec_trk& TrasanTRK, KalFitTrack& track, 
 	RecMdcKalTrack* trk, int l_mass);
@@ -139,11 +138,11 @@ class KalFitAlg : public Algorithm {
 	RecMdcKalTrack*  kaltrk,
 	RecMdcKalTrackCol* kalcol,RecMdcKalHelixSegCol* segcol,int flagsmooth);
 
-//    void complete_track(MdcRec_trk& TrasanTRK, 
-//	MdcRec_trk_add& TrasanTRK_add, 
-//	KalFitTrack& track_lead,
-//	RecMdcKalTrack*  kaltrk,
-//	RecMdcKalTrackCol* kalcol,RecMdcKalHelixSegCol* segcol);
+    //    void complete_track(MdcRec_trk& TrasanTRK, 
+    //	MdcRec_trk_add& TrasanTRK_add, 
+    //	KalFitTrack& track_lead,
+    //	RecMdcKalTrack*  kaltrk,
+    //	RecMdcKalTrackCol* kalcol,RecMdcKalHelixSegCol* segcol);
 
     // Careful refit
     void kalman_fitting_anal(void);
@@ -221,6 +220,8 @@ class KalFitAlg : public Algorithm {
     double dchi2cutf_, dchi2cuts_;
 
     double dchi2cut_all;//yzhang add debug 2014-04-12 
+
+    double pTruthHit[20][300];//yzhang debug 2014-07-10 
     std::vector<float> dchi2cut_fltLen;//yzhang add
 
     /// factor of energy loss straggling for electron
@@ -260,6 +261,7 @@ class KalFitAlg : public Algorithm {
     const MdcCalibFunSvc* m_mdcCalibFunSvc_;
     const IMagneticFieldSvc* m_MFSvc_;
     static IMdcGeomSvc* imdcGeomSvc_;
+    MdcPrintSvc*          m_mdcPrintSvc;
 
     // --- test CDC
     int testCDC;

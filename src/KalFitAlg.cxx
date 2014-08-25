@@ -50,6 +50,7 @@ typedef HepGeom::Point3D<double> HepPoint3D;
 #include "KalFitAlg/KalFitElement.h"
 #include "KalFitAlg/KalFitAlg.h"
 #include "McTruth/McParticle.h"
+#include "McTruth/MdcMcHit.h" 
 #include "EventModel/EventHeader.h"
 #include "EvTimeEvent/RecEsTime.h"
 #include "ReconEvent/ReconEvent.h"
@@ -69,6 +70,7 @@ typedef HepGeom::Point3D<double> HepPoint3D;
 #include "GaudiKernel/IPartPropSvc.h"
 #include "GaudiKernel/INTupleSvc.h"
 #include "KalFitAlg/KalFitHistItem.h"
+#include "MdcPrintSvc/IMdcPrintSvc.h"
 
 using CLHEP::HepVector; 
 using CLHEP::Hep3Vector;
@@ -295,6 +297,15 @@ StatusCode KalFitAlg::initialize()
   }
   m_particleTable = p_PartPropSvc->PDT();
 
+  //Initailize MdcPrintSvc
+  IMdcPrintSvc* imdcPrintSvc;
+  sc = service ("MdcPrintSvc", imdcPrintSvc);
+  m_mdcPrintSvc = dynamic_cast<MdcPrintSvc*> (imdcPrintSvc);
+  if ( sc.isFailure() ){
+    log << MSG::FATAL << "Could not load MdcPrintSvc!" << endreq;
+    return StatusCode::FAILURE;
+  }
+
   return StatusCode::SUCCESS; 
 }
 
@@ -366,15 +377,27 @@ void KalFitAlg::hist_def ( void )
       if ( m_ntTest )  { 
 	status = m_ntTest->addItem("ddRec",m_ddRec);
 	status = m_ntTest->addItem("ddKal",m_ddKal);
+	status = m_ntTest->addItem("ddTruth",m_ddTruth);
 	status = m_ntTest->addItem("layer",m_ddLayer);
 	status = m_ntTest->addItem("wire",m_ddWire);
 	status = m_ntTest->addItem("fiRec",m_fiRec);
 	status = m_ntTest->addItem("fiKal",m_fiKal);
 	status = m_ntTest->addItem("fiTerm",m_ddFiTerm);
+	status = m_ntTest->addItem("fltLenTerm",m_ddFltLenTerm);
 	status = m_ntTest->addItem("fltLen",m_ddFltlen);
 	status = m_ntTest->addItem("fltLenKal",m_ddFltlenKal);
+	status = m_ntTest->addItem("dchi2R",m_dchi2R);
+	status = m_ntTest->addItem("dchi2L",m_dchi2L);
+	status = m_ntTest->addItem("dchi2min",m_dchi2min);
+	status = m_ntTest->addItem("iTurn",m_iTurn);
+	status = m_ntTest->addItem("iFit",m_iFit);
 	status = m_ntTest->addItem("mass",m_ddMass);
-	status = m_ntTest->addItem("ddTruth",m_ddTruth);
+	status = m_ntTest->addItem("chi2Sum",m_chi2Sum);
+	status = m_ntTest->addItem("chi2Add",m_chi2Add);
+	status = m_ntTest->addItem("dp",m_dp);
+	status = m_ntTest->addItem("lastdp",m_lastdp);
+	status = m_ntTest->addItem("pCurrent",m_pCurrent);
+	status = m_ntTest->addItem("pTruthCurrent",m_pTruthCurrent);
       }
     }
 
@@ -594,11 +617,7 @@ void KalFitAlg::setDchisqCut()
   }
 }
 
-
-
-// event function
-StatusCode KalFitAlg::execute()
-{
+StatusCode KalFitAlg::execute() {
   MsgStream log(msgSvc(), name());
   log << MSG::INFO << "in execute()" << endreq;
   //std::cout<<"begin to deal with EVENT  ..."<<(++eventno)<<std::endl;
@@ -622,48 +641,6 @@ StatusCode KalFitAlg::execute()
       std::cout<<" magnetic field: "<<KalFitTrack::Bznom_<<std::endl;
     }
   }
-
-  RecMdcKalTrackCol* kalcol = new RecMdcKalTrackCol;
-
-  IDataProviderSvc* evtSvc = NULL;
-  Gaudi::svcLocator()->service("EventDataSvc", evtSvc);
-  if (evtSvc) {
-    log << MSG::INFO << "makeTds:event Svc has been found" << endreq;
-  } else {
-    log << MSG::FATAL << "makeTds:Could not find eventSvc" << endreq;
-    return StatusCode::SUCCESS;
-  }
-
-  StatusCode kalsc;
-  IDataManagerSvc *dataManSvc;
-  dataManSvc= dynamic_cast<IDataManagerSvc*>(evtSvc);
-  DataObject *aKalTrackCol;
-  evtSvc->findObject("/Event/Recon/RecMdcKalTrackCol",aKalTrackCol);
-  if(aKalTrackCol != NULL) {
-    dataManSvc->clearSubTree("/Event/Recon/RecMdcKalTrackCol");
-    evtSvc->unregisterObject("/Event/Recon/RecMdcKalTrackCol");
-  }
-
-  kalsc = evtSvc->registerObject("/Event/Recon/RecMdcKalTrackCol", kalcol);
-  if( kalsc.isFailure() ) {
-    log << MSG::FATAL << "Could not register RecMdcKalTrack" << endreq;
-    return StatusCode::SUCCESS;
-  }
-  log << MSG::INFO << "RecMdcKalTrackCol registered successfully!" <<endreq;
-
-  DataObject *aKalHelixSegCol;
-  evtSvc->findObject("/Event/Recon/RecMdcKalHelixSegCol", aKalHelixSegCol);
-  if(aKalHelixSegCol != NULL){
-    dataManSvc->clearSubTree("/Event/Recon/RecMdcKalHelixSegCol");
-    evtSvc->unregisterObject("/Event/Recon/RecMdcKalHelixSegCol");
-  }
-  RecMdcKalHelixSegCol *helixsegcol = new RecMdcKalHelixSegCol;  
-  kalsc = evtSvc->registerObject("/Event/Recon/RecMdcKalHelixSegCol", helixsegcol);
-  if( kalsc.isFailure()){
-    log<< MSG::FATAL << "Could not register RecMdcKalHelixSeg" <<endreq;
-    return StatusCode::SUCCESS;
-  }
-  log << MSG::INFO << "RecMdcKalHelixSegCol register successfully!" <<endreq;
 
 
   MdcGeomSvc* const geosvc = dynamic_cast<MdcGeomSvc*>(imdcGeomSvc_);
@@ -699,12 +676,36 @@ StatusCode KalFitAlg::execute()
   } 
   KalFitTrack::setEventStartTime(t0);
 
-  SmartDataPtr<MdcDigiCol> mdcDigiCol(evtSvc,"/Event/Digi/MdcDigiCol");
+  SmartDataPtr<MdcDigiCol> mdcDigiCol(eventSvc(),"/Event/Digi/MdcDigiCol");
   if (sc!=StatusCode::SUCCESS) {
     log << MSG::FATAL << "Could not find MdcDigiCol!" << endreq;
     return StatusCode::SUCCESS;
   }
   KalFitTrack::setMdcDigiCol(mdcDigiCol);
+
+  //yzhang debug 2014-07-10 
+  for(int iii = 0; iii<20;iii++){ for(int jjj = 0; jjj<300;jjj++){ pTruthHit[iii][jjj]=-999;}}
+  //yzhang 2014-07-10 for debug
+  SmartDataPtr<Event::MdcMcHitCol> mdcMcHitCol(eventSvc(),"/Event/MC/MdcMcHitCol");
+  if (!mdcMcHitCol) {
+    log << MSG::WARNING << "Could not find event" << endreq;
+  }    
+  Event::MdcMcHitCol::iterator iterMcHit = mdcMcHitCol->begin();
+  for(; iterMcHit != mdcMcHitCol->end(); ++iterMcHit) {
+    if((*iterMcHit)->getPositionFlag()!=-999) continue;
+    Identifier mdcid = (*iterMcHit)->identify();
+    int layerId = MdcID::layer(mdcid);
+    int wireId = MdcID::wire(mdcid);
+    double p = sqrt((*iterMcHit)->getPositionX()*(*iterMcHit)->getPositionX() + (*iterMcHit)->getPositionY()*(*iterMcHit)->getPositionY()+(*iterMcHit)->getPositionZ()*(*iterMcHit)->getPositionZ());
+    pTruthHit[layerId][wireId] = p;
+    //double pt = sqrt((*iterMcHit)->getPositionX()*(*iterMcHit)->getPositionX() + (*iterMcHit)->getPositionY()*(*iterMcHit)->getPositionY());
+  }
+
+  int nHits=0; int nSt=0;
+  double maxTrackLength = -999;
+  Hep3Vector trueMomFinal;
+  HepPoint3D positionFinal;
+  HitRefVec  hitRefVec;
 
   // register RecMdcTrack and MdcRecHit collection 
   bool mcstat = false;//true;
@@ -1025,8 +1026,10 @@ StatusCode KalFitAlg::execute()
 void KalFitAlg::fillTds(MdcRec_trk& TrasanTRK, KalFitTrack& track, 
     RecMdcKalTrack* trk , int l_mass) {
 
-  HepPoint3D IP(0,0,0);
-  track.pivot(IP);
+  //yzhang delete change pivot 2014-07-03 
+  //HepPoint3D IP(0,0,0);
+  //track.pivot(IP);
+
   // Fit quality
   int iqual(1);
   int trasster = TrasanTRK.nster, trakster = track.nster(),
@@ -1081,7 +1084,7 @@ void KalFitAlg::fillTds(MdcRec_trk& TrasanTRK, KalFitTrack& track,
       track.Ea()[2][2] > 0 && track.Ea()[3][3] > 0 && 
       track.Ea()[4][4] > 0 && iqual) {
 
-    cout<<__FILE__<<" "<<__LINE__<<" run "<<runNo<<" evt "<<eventNo <<" hypo "<<l_mass<<" fit success nHitKal="<< track.nchits() <<" nHitMdc "<<TrasanTRK.nhits <<" nHitDiff "<<TrasanTRK.nhits-track.nchits()<<" fp "<<track.momentum().mag()<<endl;//yzhang debug
+    cout<<__FILE__<<" "<<__LINE__<<" run "<<runNo<<" evt "<<eventNo <<" hypo "<<l_mass<<" fit success nHitKal="<< track.nchits() <<" nHitMdc "<<TrasanTRK.nhits <<" nHitDiff "<<TrasanTRK.nhits-track.nchits()<<" fp "<<track.momentum().mag()<<" pivot "<<track.pivot()<<endl;//yzhang debug
     if(debug_ == 4) cout<<"fillTds>.....going on "<<endl;
     trk->setStat(0,0,l_mass);
     if(debug_ >0) cout<<"evt "<<eventNo<<" mass[" <<l_mass<<"] filter success  "<<std::endl;
@@ -1091,7 +1094,10 @@ void KalFitAlg::fillTds(MdcRec_trk& TrasanTRK, KalFitTrack& track,
     trk->setChisq(track.chiSq(),0,l_mass);
     trk->setNdf(track.nchits()-5,0,l_mass);
     trk->setNhits(track.nchits(),l_mass);
+    //trkid
+    trk->setTrackId(TrasanTRK.id);
 
+    //std::cout<<__FILE__<<"   "<<__LINE__<<"  setFHelix "<<track.a()<<" l_mass "<<l_mass<<std::endl;
     trk->setFHelix(track.a(),l_mass);
     trk->setFError(track.Ea(),l_mass);
 
@@ -1106,6 +1112,8 @@ void KalFitAlg::fillTds(MdcRec_trk& TrasanTRK, KalFitTrack& track,
     // chisq & ndf (0 : filter ; 1 : smoother;)
     trk->setChisq(TrasanTRK.chiSq,0,l_mass);
     trk->setNdf(TrasanTRK.nhits-5,0,l_mass);
+    //trkid
+    trk->setTrackId(TrasanTRK.id);
     // nhits  
     trk->setNhits(TrasanTRK.nhits,l_mass);
     double a_trasan[5], ea_trasan[15];
@@ -1119,103 +1127,6 @@ void KalFitAlg::fillTds(MdcRec_trk& TrasanTRK, KalFitTrack& track,
     trk->setFError(ea_trasan,l_mass);
   }
 }
-
-// Fill Tds  :
-void KalFitAlg::fillTds_lead(MdcRec_trk& TrasanTRK, KalFitTrack& track, 
-    RecMdcKalTrack* trk , int l_mass) {
-
-  HepPoint3D IP(0,0,0);
-  track.pivot(IP);    
-  // Fit quality
-  // int iqual(1);
-  int trasster = TrasanTRK.nster, trakster = track.nster(),
-      trasax(TrasanTRK.nhits-trasster), trakax(track.nchits()-trakster);
-  if (TrasanTRK.nhits-track.nchits()>fitnocut_ || 
-      TrasanTRK.helix[2]*track.a()[2]<0)
-    iqual_front_[l_mass] = 0;
-  if (debug_ == 4) {
-
-    cout<<"Nhit from PR "<<TrasanTRK.nhits<<"  nhit  "<<track.nchits()<<endl;
-    cout<< "trasster trakster trasax trakax  TrasK      trackK  iqual"<<endl
-      <<trasster<<"        "<<trakster<<"        "<<trasax<<"        "<<trakax
-      <<"   "<<TrasanTRK.helix[2]<<"   "<<track.a()[2]<<"   "<<iqual_front_[l_mass]<<endl;  
-    cout<<"FillTds_lead> track.chiSq..."<<track.chiSq()<<" nchits "<<track.nchits()
-      <<" nster "<<track.nster()<<" iqual_front_[l_mass] "<<iqual_front_[l_mass]<<"  track.Ea "<<track.Ea()<<endl; 
-
-    cout << " TRASAN stereo = " << trasster
-      << " and KalFitTrack = " << trakster << std::endl;
-    //cout << " TRASAN axial = " << trasax 
-    //<< " and KalFitTrack = " << trakax << std::endl;
-
-    if (!iqual_front_[l_mass]) {
-      cout << "...there is a problem during fit !! " << std::endl;
-      if (trasster-trakster>5) 
-	cout << " because stereo " << trasster-trakster << std::endl;
-      //if (trasax-trakax >5)	
-      //cout << " because axial " << std::endl;
-      if (TrasanTRK.helix[2]*track.a()[2]<0)
-	cout << " because kappa sign " << std::endl;
-    }
-  }
-  // Protection : if any problem, we keep the original information !!!!
-  if (track.nchits() > 5 && track.nster() > 1 && //track.nchits()-track.nster() > 2 
-      track.chiSq() > 0 &&
-      track.Ea()[0][0] > 0 && track.Ea()[1][1] > 0 && 
-      track.Ea()[2][2] > 0 && track.Ea()[3][3] > 0 && 
-      track.Ea()[4][4] > 0 && iqual_front_[l_mass]) {
-
-    trk->setStat(0,0,l_mass);
-    trk->setMass(track.mass(),l_mass);
-    trk->setChisq(track.chiSq(),0,l_mass);
-    trk->setNdf(track.nchits()-5,0,l_mass);
-    trk->setNhits(track.nchits(),l_mass);
-    //trkid
-    trk->setTrackId(TrasanTRK.id);
-    if(debug_ >0) cout<<"evt "<<eventNo<<" mass[" <<l_mass<<"] filter success  "<< " nHitKal="<< track.nchits() <<" nHitMdc "<<TrasanTRK.nhits <<" nHitDiff "<<TrasanTRK.nhits-track.nchits()<<" p "<<track.momentum().mag()<<endl;//yzhang debug
-
-    if (debug_ == 4) cout<<" trasan id...1 "<<TrasanTRK.id<<endl;    
-
-    trk->setFHelix(track.a(),l_mass);
-    trk->setFError(track.Ea(),l_mass);
-    //yzhang add set mom
-    setRecMdcKalTrackMom(trk, track.a(),l_mass);
-
-  } else {
-
-    //cout<<"copy Mdc Helix in fillTds_lead()"<<endl;
-
-    if(debug_) cout<<"ALARM: FillTds_forMdc Not refit with KalFilter!!!"<<endl;
-    // NOT refit with Kalman filter :
-    trk->setStat(1,0,l_mass);
-    trk->setMass(KalFitTrack::mass(l_mass),l_mass);
-
-    // chisq & ndf 
-    trk->setChisq(TrasanTRK.chiSq,0,l_mass);
-    trk->setNdf(TrasanTRK.nhits-5,0,l_mass);
-    //trkid
-    trk->setTrackId(TrasanTRK.id);
-
-    if (debug_ ==4) cout<<" trasan id...2 "<<TrasanTRK.id<<endl;    
-
-    // nhits 
-    trk->setNhits(TrasanTRK.nhits,l_mass);
-    double a_trasan[5], ea_trasan[15];
-    for( int i =0 ; i <5; i++){
-      a_trasan[i] = TrasanTRK.helix[i];
-    }
-    for( int j =0 ; j <15; j++){
-      ea_trasan[j] = TrasanTRK.error[j];
-    }
-    trk->setFHelix(a_trasan,l_mass);
-    trk->setFError(ea_trasan,l_mass);
-    // trk->setFHelix(TrasanTRK.helix,l_mass);
-    // trk->setFError(TrasanTRK.error,l_mass);
-    //yzhang add set mom
-    setRecMdcKalTrackMom(trk, track.a(),l_mass);
-  }
-}
-
-
 
 
 void KalFitAlg::fillTds_ip(MdcRec_trk& TrasanTRK, KalFitTrack& track, 
@@ -1315,9 +1226,7 @@ void KalFitAlg::fillTds_ip(MdcRec_trk& TrasanTRK, KalFitTrack& track,
 
     //yzhang add set mom
     setRecMdcKalTrackMom(trk, track.a(),l_mass);
-  }
-
-  else{
+  } else{
     //cout<<"copy Mdc Helix in fillTds_ip()"<<endl;
 
     // fill track information
@@ -1399,802 +1308,6 @@ void KalFitAlg::fillTds_ip(MdcRec_trk& TrasanTRK, KalFitTrack& track,
   }
 }
 
-
-void KalFitAlg::fillTds_back(KalFitTrack& track, 
-    RecMdcKalTrack* trk, MdcRec_trk& TrasanTRK, int l_mass)
-{
-
-  HepPoint3D IP(0,0,0);
-  //track.pivot(IP);
-
-  // Fit quality
-  int iqual(1);
-
-  if ((trk->getNdf(0,l_mass))-(track.ndf_back()-5)>5)   iqual = 0;
-
-  if(debug_ == 4) cout<< "fillTds_back> mass "<<trk->getMass(2)<<" ndf[0] "<<trk->getNdf(0,2)<<endl;
-  if(debug_ == 4) cout<<"ndf_back  "<< track.ndf_back() << " chi2_back " << track.chiSq_back()<<endl;
-
-  if (track.ndf_back() > 5 && track.chiSq_back() > 0 &&
-      track.Ea()[0][0] > 0 && track.Ea()[1][1] > 0 && 
-      track.Ea()[2][2] > 0 && track.Ea()[3][3] > 0 && 
-      track.Ea()[4][4] > 0 && fabs(track.a()[0]) < DBL_MAX && 
-      fabs(track.a()[1]) < DBL_MAX && fabs(track.a()[2]) < DBL_MAX && 
-      fabs(track.a()[3]) < DBL_MAX && fabs(track.a()[4]) < DBL_MAX &&
-      iqual) {
-
-    // chisq ( for backward filter)
-
-    trk->setStat(0,1,l_mass);
-    trk->setChisq(track.chiSq_back(),1,l_mass);
-    trk->setNdf(track.ndf_back()-5,1,l_mass);
-    trk->setLength(track.pathip(),l_mass);
-    if(debug_ == 4) cout<<"l_mass "<<l_mass<<" path set as "<<track.pathip()<<endl;      
-    trk->setTof(track.tof(),l_mass);
-
-    if (KalFitTrack::tofall_){
-      if(l_mass == 3) trk->setTof(track.tof_kaon(),l_mass);
-      if(l_mass == 4) trk->setTof(track.tof_proton(),l_mass);
-    }
-
-    // Path length in each MDC layer :
-    if (pathl_) 
-      for (int i = 0; i<43; i++) {
-	trk->setPathl(track.pathl()[i],i);
-      }
-
-    trk->setLHelix(track.a(),l_mass);
-    trk->setLError(track.Ea(),l_mass);
-    trk->setLPivot(track.pivot(),l_mass);
-
-    trk->setLPoint(track.point_last(),l_mass);  
-    trk->setPathSM(track.getPathSM(),l_mass);
-    trk->setTof(track.getTofSM(),l_mass);
-    trk->setFiTerm(track.getFiTerm(),l_mass);
-
-    if(4 == debug_){
-      std::cout<<" last pivot: "<< trk->getLPivot(0)<<std::endl;
-      std::cout<<" pathl in SM: "<< trk->getPathSM(0)<<std::endl;
-      std::cout<<" fiTerm: "<< trk->getFiTerm(0)<<std::endl;	  
-      std::cout<<" last point: "<< trk->getLPoint(0)<<std::endl;
-    }
-
-  } else {
-    if(debug_) cout<<"ALARM: FillTds_back Not refit with KalFilter!!!"<<endl;
-    // NOT refit with Kalman filter :
-    trk->setStat(1,1,l_mass);
-    HepPoint3D piv(TrasanTRK.pivot[0],
-	TrasanTRK.pivot[1],
-	TrasanTRK.pivot[2]);
-
-    HepVector a(5);
-    for(int i = 0; i < 5; i++)
-      a[i] = TrasanTRK.helix[i];
-
-    HepSymMatrix ea(5);
-    for(int i = 0, k = 0; i < 5; i++) {
-      for(int j = 0; j <= i; j++) {
-	ea[i][j] = matrixg_*TrasanTRK.error[k++];
-	ea[j][i] = ea[i][j];
-      }
-    }
-
-    KalFitTrack track_rep(piv, a, ea, lead_, 
-	TrasanTRK.chiSq, TrasanTRK.nhits);
-    double fiTerm = TrasanTRK.fiTerm;
-
-    double fi0 = track_rep.phi0();
-    HepPoint3D  xc(track_rep.kappa()/fabs(track_rep.kappa())* 
-	track_rep.center() );
-    double x = xc.x();
-    double y = xc.y();
-    double phi_x;
-    if( fabs( x ) > 1.0e-10 ){
-      phi_x = atan2( y, x );
-      if( phi_x < 0 ) phi_x += 2*M_PI;
-    } else {
-      phi_x = ( y > 0 ) ? M_PI_4: 3.0*M_PI_4;
-    }
-    if(debug_ == 4) cout<<"fiTerm "<<fiTerm<<" fi0 "<<fi0<<" phi_x "<<phi_x<<endl;
-    double dphi = fabs( fiTerm + fi0 - phi_x );
-    //if( dphi >= 2*M_PI ) dphi -= 2*M_PI;//yzhang delete 2014-03-29 
-    double tanl = track_rep.tanl();
-    double cosl_inv = sqrt( tanl*tanl + 1.0 );
-    if(debug_ == 4) { 
-      cout<<"tanl= "<<tanl<<" radius "<<track_rep.radius()<<" dphi "<<dphi<<endl;
-      cout<<" cosl_inv  "<<cosl_inv<<"  radius_numf  "<<track_rep.radius_numf()
-	<<__LINE__<<" max track len "<<fabs( track_rep.radius() * dphi * cosl_inv )<<endl;
-    }
-    double track_len(fabs( track_rep.radius() * dphi * cosl_inv ));
-
-    double light_speed( 29.9792458 );     // light speed in cm/nsec
-    double pt( 1.0 / track_rep.kappa() );
-    double p( pt * sqrt( 1.0 + tanl*tanl ) );
-
-    // chisq (2 : for backward filter)
-    trk->setStat(1,1,l_mass);
-    trk->setChisq(TrasanTRK.chiSq,1,l_mass);
-    if(debug_ == 4) {
-      std::cout<<".....fillTds_back...chiSq..."<< TrasanTRK.chiSq<<endl;
-      std::cout<<"...track_len..."<<track_len<<" ndf[1] "<< trk->getNdf(0,l_mass)<<endl;
-    }
-    trk->setNdf(TrasanTRK.nhits-5,1,l_mass);
-    trk->setLength(track_len,l_mass);
-    double mass_over_p( KalFitTrack::mass(l_mass)/ p );
-    double beta( 1.0 / sqrt( 1.0 + mass_over_p * mass_over_p ) );
-    trk->setTof(track_len / ( light_speed * beta ), l_mass) ;
-
-    track_rep.pivot(IP);
-
-    trk->setLHelix(track_rep.a(),l_mass);      
-    trk->setLError(track_rep.Ea(),l_mass);
-    trk->setLPivot(track.pivot(),l_mass);
-
-    /// right???
-    trk->setLPoint(track.point_last(),l_mass);
-    trk->setPathSM(track.getPathSM(),l_mass);
-    trk->setTof(track.getTofSM(),l_mass);
-    trk->setFiTerm(track.getFiTerm(),l_mass);
-  }
-
-  // test--------
-  if(debug_ == 4) {
-
-    std::cout<<" last point: "<< trk->getLPoint(0)<<std::endl;
-    std::cout<<" pathl in SM: "<< trk->getPathSM(0)<<std::endl;
-    std::cout<<" fiTerm: "<< trk->getFiTerm(0)<<std::endl;
-
-    cout<<"Now let us see results after smoothering at IP:........."<<endl;
-    cout << " dr = " << track.a()[0] 
-      << ", Er_dr = " << sqrt(track.Ea()[0][0]) << std::endl;
-    cout<< " phi0 = " << track.a()[1] 
-      << ", Er_phi0 = " << sqrt(track.Ea()[1][1]) << std::endl;
-    cout << " PT = " << 1/track.a()[2] 
-      << ", Er_kappa = " << sqrt(track.Ea()[2][2]) << std::endl;
-    cout << " dz = " << track.a()[3] 
-      << ", Er_dz = " << sqrt(track.Ea()[3][3]) << std::endl;
-    cout << " tanl = " << track.a()[4] 
-      << ", Er_tanl = " << sqrt(track.Ea()[4][4]) << std::endl;
-    cout << " Ea = " << track.Ea() <<endl;
-  }
-  // test end ----------
-}
-
-void KalFitAlg::fillTds_back(KalFitTrack& track, 
-    RecMdcKalTrack* trk, MdcRec_trk& TrasanTRK, int l_mass,
-    RecMdcKalHelixSegCol*  segcol)
-{
-
-  HepPoint3D IP(0,0,0);
-
-  // attention  the pivot problem of the HelixSeg ... ???
-  track.pivot(IP);
-  // Fit quality
-  //int iqual(1);
-  //if ((trk->getNdf(0,2))-(track.ndf_back()-5)>5)
-  // form getNdf(0,2) to getNdf(0,1) for muon hypothesis  
-
-  if ((trk->getNdf(0,l_mass))-(track.ndf_back()-5)>5){
-    iqual_back_ = 0;
-  }
-  if(usage_>1){
-    for(int i=0; i<5; i++) iqual_front_[i] = 1;
-    iqual_back_ = 1;
-  }
-  if(debug_ == 4){ 
-    std::cout<< "fillTds_back> mass "<<trk->getMass(2)<<" ndf[0][l_mass] "<<trk->getNdf(0,l_mass)<<endl;
-    std::cout<<"ndf_back  "<< track.ndf_back() << " chi2_back " << track.chiSq_back()<<endl;
-    std::cout<<"track.ndf_back(), track.chiSq_back(), track.Ea()[5][5], track.a()[5], iqual_front_, iqual_back_: "<<track.ndf_back()<<" , "<<track.chiSq_back()<<" , "<<track.Ea()<<" , "<<track.a()<<" , "<<iqual_front_[l_mass]<<" , "<<iqual_back_<<std::endl;
-  } 
-
-  if (track.ndf_back() > 5 && track.chiSq_back() > 0 &&
-      track.Ea()[0][0] > 0 && track.Ea()[1][1] > 0 && 
-      track.Ea()[2][2] > 0 && track.Ea()[3][3] > 0 && 
-      track.Ea()[4][4] > 0 && fabs(track.a()[0]) < DBL_MAX && 
-      fabs(track.a()[1]) < DBL_MAX && fabs(track.a()[2]) < DBL_MAX && 
-      fabs(track.a()[3]) < DBL_MAX && fabs(track.a()[4]) < DBL_MAX && iqual_front_[l_mass] && iqual_back_){ 
-
-    // chisq ( for backward filter)
-    //std::cout<<"begin to fillTds_back track no. : "<<(++Tds_back_no)<<std::endl;
-
-
-    HelixSegRefVec helixsegrefvec;
-    for (vector<KalFitHelixSeg>::iterator it = track.HelixSegs().begin(); it!=track.HelixSegs().end();it ++)
-    {
-
-      //std::cout<<" alpha of KalFitHelixSeg: "<<it->alpha()<<std::endl;	 
-      //std::cout<<" doca1 of KalFitHelixSeg: "<<(it->approach(*(it->HitMdc()),false))<<std::endl;
-
-      it->pivot(IP);
-
-      //std::cout<<" doca2 of KalFitHelixSeg: "<<(it->approach(*(it->HitMdc()),false))<<std::endl;
-
-      RecMdcKalHelixSeg* helixseg = new RecMdcKalHelixSeg;
-      helixseg->setResIncl(it->residual_include());
-      helixseg->setResExcl(it->residual_exclude());    
-      if(debug_ == 4) { 
-	std::cout<<"helixseg->Res_inc ..."<<helixseg->getResIncl()<<std::endl;
-      }
-      helixseg->setDrIncl(it->a_include()[0]);  
-      helixseg->setFi0Incl(it->a_include()[1]);  
-      helixseg->setCpaIncl(it->a_include()[2]);  
-      helixseg->setDzIncl(it->a_include()[3]);  
-      helixseg->setTanlIncl(it->a_include()[4]);
-
-
-      helixseg->setDrExcl(it->a_exclude()[0]);
-      helixseg->setFi0Excl(it->a_exclude()[1]);	      
-      helixseg->setCpaExcl(it->a_exclude()[2]);		         
-      helixseg->setDzExcl(it->a_exclude()[3]);			         
-      helixseg->setTanlExcl(it->a_exclude()[4]);					 
-
-      helixseg->setHelixIncl(it->a_include());
-      helixseg->setErrorIncl(it->Ea_include());
-
-      //Helix temp(IP, it->a(), it->Ea());
-
-      //std::cout<<" doca3 of KalFitHelixSeg: "<<(temp.approach(*(it->HitMdc()),false))<<std::endl;
-
-      helixseg->setHelixExcl(it->a_exclude());
-      helixseg->setErrorExcl(it->Ea_exclude());
-      helixseg->setLayerId(it->layer());
-
-      //std::cout<<__FILE__<<" "<<__LINE__<<" tk "<<it->HitMdc()->rechitptr()->getTrkId()<<" ("<<MdcID::layer(it->HitMdc()->rechitptr()->getMdcId())<<","<<MdcID::wire(it->HitMdc()->rechitptr()->getMdcId())<<")"<<std::endl; 
-      if(debug_ == 4) {
-	std::cout<<"KalFitHelixSeg track id .."<<it->HitMdc()->rechitptr()->getTrkId()<<" ("<<MdcID::layer(it->HitMdc()->rechitptr()->getMdcId())<<","<<MdcID::wire(it->HitMdc()->rechitptr()->getMdcId())<<")"<<std::endl; 
-	std::cout<<"helixseg a: "<<it->a()<<std::endl;
-	std::cout<<"helixseg a_excl: "<<helixseg->getHelixExcl()<<std::endl;
-	std::cout<<"helixseg a_incl: "<<helixseg->getHelixIncl()<<std::endl;
-
-	std::cout<<"helixseg Ea: "<<it->Ea()<<std::endl;
-	std::cout<<"helixseg Ea_excl: "<<helixseg->getErrorExcl()<<std::endl;
-	std::cout<<"helixseg Ea_incl: "<<helixseg->getErrorIncl()<<std::endl;
-
-	std::cout<<"helixseg layer: "<<it->layer()<<std::endl;
-      }    
-
-
-      helixseg->setTrackId(it->HitMdc()->rechitptr()->getTrkId());
-      helixseg->setMdcId(it->HitMdc()->rechitptr()->getMdcId());
-      helixseg->setFlagLR(it->HitMdc()->LR());
-      helixseg->setTdc(it->HitMdc()->rechitptr()->getTdc());
-      helixseg->setAdc(it->HitMdc()->rechitptr()->getAdc());
-      helixseg->setZhit(it->HitMdc()->rechitptr()->getZhit());
-      helixseg->setTof(it->tof());
-      helixseg->setDocaIncl(it->doca_include());
-      helixseg->setDocaExcl(it->doca_exclude());
-      helixseg->setDD(it->dd());
-      helixseg->setEntra(it->HitMdc()->rechitptr()->getEntra());
-      helixseg->setDT(it->dt());
-      segcol->push_back(helixseg);
-      SmartRef<RecMdcKalHelixSeg> refhelixseg(helixseg);
-      helixsegrefvec.push_back(refhelixseg);
-
-      if(ntuple_&8){
-	m_docaInc = helixseg -> getDocaIncl();
-	m_docaExc = helixseg -> getDocaExcl();
-	m_residualInc = helixseg -> getResIncl();
-	m_residualExc = helixseg -> getResExcl();
-	m_dd = helixseg -> getDD();
-	m_lr = helixseg->getFlagLR();
-	m_tdrift = helixseg -> getDT();
-	m_layerid = helixseg -> getLayerId();
-	m_yposition= it->HitMdc()->wire().fwd().y();
-	m_eventNo = eventNo;
-	StatusCode sc6 = m_nt6->write();
-	if( sc6.isFailure() ) cout<<"Ntuple6 helixseg filling failed!"<<endl;
-
-      }
-    }
-
-    trk->setVecHelixSegs(helixsegrefvec, l_mass); 
-    if(debug_ == 4) {
-      std::cout<<"trk->getVecHelixSegs size..."<<(trk->getVecHelixSegs()).size()<<std::endl;
-    }
-    trk->setStat(0,1,l_mass);
-    trk->setChisq(track.chiSq_back(),1,l_mass);
-    trk->setNdf(track.ndf_back()-5,1,l_mass);
-    //   add setNhits ,maybe some problem
-    trk->setNhits(track.ndf_back(),l_mass);
-    if(!(track.ndf_back()==track.HelixSegs().size())) {
-      std::cout<<"THEY ARE NOT EQUALL!!!"<<std::endl;
-    } 
-    trk->setLength(track.pathip(),l_mass);
-    if(debug_ == 4) {
-      std::cout<<"l_mass "<<l_mass<<" path set as "<<track.pathip()<<endl;      
-    }   
-    trk->setTof(track.tof(),l_mass);
-    if (KalFitTrack::tofall_){
-      if(l_mass == 3) trk->setTof(track.tof_kaon(),l_mass);
-      if(l_mass == 4) trk->setTof(track.tof_proton(),l_mass);
-    }
-    // Path length in each MDC layer :
-    if (pathl_) 
-      for (int i = 0; i<43; i++) {
-	trk->setPathl(track.pathl()[i],i);
-      }
-    trk->setLHelix(track.a(),l_mass);
-    trk->setLError(track.Ea(),l_mass);
-    trk->setLPivot(track.pivot(),l_mass);
-
-    trk->setLPoint(track.point_last(),l_mass);
-    trk->setPathSM(track.getPathSM(),l_mass);
-    trk->setTof(track.getTofSM(),l_mass);
-    trk->setFiTerm(track.getFiTerm(),l_mass);
-    double a_trasan[5], ea_trasan[15];
-    for( int i =0 ; i <5; i++){
-      a_trasan[i] = TrasanTRK.helix[i];
-    }
-    for( int j =0 ; j <15; j++){
-      ea_trasan[j] = TrasanTRK.helix[j];
-    }
-    trk->setTHelix(a_trasan);
-    trk->setTError(ea_trasan);
-
-    if(4 == debug_){
-      std::cout<<" last pivot: "<< trk->getLPivot(0)<<std::endl;
-      std::cout<<" pathl in SM: "<< trk->getPathSM(0)<<std::endl;
-      std::cout<<" fiTerm: "<< trk->getFiTerm(0)<<std::endl;
-      std::cout<<" last point: "<< trk->getLPoint(0)<<std::endl;
-    }
-
-  } else {
-
-    if(debug_) cout<<"ALARM: FillTds_back Not refit with KalFilter!!!"<<endl;
-    // NOT refit with Kalman filter :
-    trk->setStat(1,1,l_mass);
-
-    HepPoint3D piv(TrasanTRK.pivot[0],
-	TrasanTRK.pivot[1],
-	TrasanTRK.pivot[2]);
-
-    HepVector a(5);
-    for(int i = 0; i < 5; i++)
-      a[i] = TrasanTRK.helix[i];
-
-    HepSymMatrix ea(5);
-    for(int i = 0, k = 0; i < 5; i++) {
-      for(int j = 0; j <= i; j++) {
-	ea[i][j] = matrixg_*TrasanTRK.error[k++];
-	ea[j][i] = ea[i][j];
-      }
-    }
-
-    KalFitTrack track_rep(piv, a, ea, lead_, 
-	TrasanTRK.chiSq, TrasanTRK.nhits);
-    double fiTerm = TrasanTRK.fiTerm;
-
-    double fi0 = track_rep.phi0();
-    HepPoint3D  xc(track_rep.kappa()/fabs(track_rep.kappa())* 
-	track_rep.center() );
-    double x = xc.x();
-    double y = xc.y();
-    double phi_x;
-    if( fabs( x ) > 1.0e-10 ){
-      phi_x = atan2( y, x );
-      if( phi_x < 0 ) phi_x += 2*M_PI;
-    } else {
-      phi_x = ( y > 0 ) ? M_PI_4: 3.0*M_PI_4;
-    }
-    if(debug_ == 4) cout<<"fiTerm "<<fiTerm<<" fi0 "<<fi0<<" phi_x "<<phi_x<<endl;
-    double dphi = fabs( fiTerm + fi0 - phi_x );
-    //if( dphi >= 2*M_PI ) dphi -= 2*M_PI;//yzhang delete 
-    double tanl = track_rep.tanl();
-    double cosl_inv = sqrt( tanl*tanl + 1.0 );
-    if(debug_ == 4) { 
-      cout<<"tanl= "<<tanl<<" radius "<<track_rep.radius()<<" dphi "<<dphi<<endl;
-      cout<<" cosl_inv  "<<cosl_inv<<"  radius_numf  "<<track_rep.radius_numf()<<endl;
-    }
-    double track_len(fabs( track_rep.radius() * dphi * cosl_inv ));
-    if(debug_==4) cout<<__LINE__<<" max track len "<<track_len<<endl;
-    double light_speed( 29.9792458 );     // light speed in cm/nsec
-    double pt( 1.0 / track_rep.kappa() );
-    double p( pt * sqrt( 1.0 + tanl*tanl ) );
-
-
-    // chisq (2 : for backward filter)
-
-    trk->setStat(1,1,l_mass);
-    trk->setChisq(TrasanTRK.chiSq,1,l_mass);
-    if(debug_ == 4) { 
-      std::cout<<".....fillTds_back...chiSq..."<< TrasanTRK.chiSq<<std::endl;
-      std::cout<<"...track_len..."<<track_len<<" ndf[1] "<< trk->getNdf(0,l_mass)<<std::endl;
-    }    
-    trk->setNdf(TrasanTRK.nhits-5,1,l_mass);
-    trk->setLength(track_len,l_mass);
-    double mass_over_p( KalFitTrack::mass(l_mass)/ p );
-    double beta( 1.0 / sqrt( 1.0 + mass_over_p * mass_over_p ) );
-    trk->setTof(track_len / ( light_speed * beta ), l_mass) ;
-
-    track_rep.pivot(IP);
-
-    trk->setLHelix(track_rep.a(),l_mass);         
-    trk->setLError(track_rep.Ea(),l_mass);
-    trk->setLPivot(track.pivot(),l_mass);
-
-    /// right???
-    trk->setLPoint(track.point_last(),l_mass);
-    trk->setPathSM(track.getPathSM(),l_mass);
-    trk->setTof(track.getTofSM(),l_mass);
-    trk->setFiTerm(track.getFiTerm(),l_mass);
-    trk->setTHelix(track_rep.a());         
-    trk->setTError(track_rep.Ea());
-
-  }
-
-  // test--------
-  if(debug_ == 4) {
-    cout<<"Now let us see results after smoothering at IP:........."<<endl;
-    cout << " dr = " << track.a()[0] 
-      << ", Er_dr = " << sqrt(track.Ea()[0][0]) << std::endl;
-    cout<< " phi0 = " << track.a()[1] 
-      << ", Er_phi0 = " << sqrt(track.Ea()[1][1]) << std::endl;
-    cout << " PT = " << 1/track.a()[2] 
-      << ", Er_kappa = " << sqrt(track.Ea()[2][2]) << std::endl;
-    cout << " dz = " << track.a()[3] 
-      << ", Er_dz = " << sqrt(track.Ea()[3][3]) << std::endl;
-    cout << " tanl = " << track.a()[4] 
-      << ", Er_tanl = " << sqrt(track.Ea()[4][4]) << std::endl;
-    cout << " Ea = " << track.Ea() <<endl;
-  }
-  // test end ----------
-}
-
-void KalFitAlg::fillTds_back(KalFitTrack& track, 
-    RecMdcKalTrack* trk, MdcRec_trk& TrasanTRK, int l_mass,
-    RecMdcKalHelixSegCol*  segcol, int smoothflag)
-{
-
-  HepPoint3D IP(0,0,0);
-
-  // attention  the pivot problem of the HelixSeg ... ???
-  //track.pivot(IP);
-  // Fit quality
-  //int iqual(1);
-  //if ((trk->getNdf(0,2))-(track.ndf_back()-5)>5)
-  // form getNdf(0,2) to getNdf(0,1) for muon hypothesis  
-
-  iqual_back_ = 1;
-  if ((trk->getNdf(0,l_mass))-(track.ndf_back()-5)>5){
-    iqual_back_ = 0;
-  }
-
-  if(debug_ == 4){ 
-    std::cout<< "fillTds_back> mass "<<trk->getMass(2)<<" ndf[0][l_mass] "<<trk->getNdf(0,l_mass)<<endl;
-    std::cout<<"ndf_back  "<< track.ndf_back() << " chi2_back " << track.chiSq_back()<<endl;
-  } 
-
-
-  if (track.ndf_back() > 5 && track.chiSq_back() > 0 &&
-      track.Ea()[0][0] > 0 && track.Ea()[1][1] > 0 && 
-      track.Ea()[2][2] > 0 && track.Ea()[3][3] > 0 && 
-      track.Ea()[4][4] > 0 && fabs(track.a()[0]) < DBL_MAX && 
-      fabs(track.a()[1]) < DBL_MAX && fabs(track.a()[2]) < DBL_MAX && 
-      fabs(track.a()[3]) < DBL_MAX && fabs(track.a()[4]) < DBL_MAX && iqual_front_[l_mass] && iqual_back_){ 
-
-    // chisq ( for backward filter)
-    //std::cout<<"begin to fillTds_back track no. : "<<(++Tds_back_no)<<std::endl;
-
-
-    HelixSegRefVec helixsegrefvec;
-    for (vector<KalFitHelixSeg>::iterator it = track.HelixSegs().begin(); it!=track.HelixSegs().end();it ++)
-    {
-
-      //std::cout<<" alpha of KalFitHelixSeg: "<<it->alpha()<<std::endl;	 
-      //std::cout<<" doca1 of KalFitHelixSeg: "<<(it->approach(*(it->HitMdc()),false))<<std::endl;
-
-      it->pivot(IP);
-
-      //std::cout<<" doca2 of KalFitHelixSeg: "<<(it->approach(*(it->HitMdc()),false))<<std::endl;
-
-      RecMdcKalHelixSeg* helixseg = new RecMdcKalHelixSeg;
-      helixseg->setResIncl(it->residual_include());
-      helixseg->setResExcl(it->residual_exclude());    
-      if(debug_ == 4) { 
-	std::cout<<"helixseg->Res_inc ..."<<helixseg->getResIncl()<<std::endl;
-      }
-      // 	helixseg->setDrIncl(it->a_include()[0]);  
-      //	helixseg->setFi0Incl(it->a_include()[1]);  
-      //	helixseg->setCpaIncl(it->a_include()[2]);  
-      //	helixseg->setDzIncl(it->a_include()[3]);  
-      //	helixseg->setTanlIncl(it->a_include()[4]);
-      //
-      //
-      //      helixseg->setDrExcl(it->a_exclude()[0]);
-      //      helixseg->setFi0Excl(it->a_exclude()[1]);	      
-      //	helixseg->setCpaExcl(it->a_exclude()[2]);		         
-      //	helixseg->setDzExcl(it->a_exclude()[3]);			         
-      //	helixseg->setTanlExcl(it->a_exclude()[4]);					 
-
-      helixseg->setHelixIncl(it->a_include());
-      //helixseg->setErrorIncl(it->Ea_include());
-
-      //Helix temp(IP, it->a(), it->Ea());
-
-      //std::cout<<" doca3 of KalFitHelixSeg: "<<(temp.approach(*(it->HitMdc()),false))<<std::endl;
-
-      helixseg->setHelixExcl(it->a_exclude());
-      //helixseg->setErrorExcl(it->Ea_exclude());
-      //helixseg->setLayerId(it->layer());
-
-      //std::cout<<__FILE__<<" "<<__LINE__<<" tk "<<it->HitMdc()->rechitptr()->getTrkId()<<" ("<<MdcID::layer(it->HitMdc()->rechitptr()->getMdcId())<<","<<MdcID::wire(it->HitMdc()->rechitptr()->getMdcId())<<")"<<std::endl; 
-      if(debug_ == 4) {
-	std::cout<<"KalFitHelixSeg track id .."<<it->HitMdc()->rechitptr()->getTrkId()<<" ("<<MdcID::layer(it->HitMdc()->rechitptr()->getMdcId())<<","<<MdcID::wire(it->HitMdc()->rechitptr()->getMdcId())<<")"<<std::endl; 
-	std::cout<<"helixseg a: "<<it->a()<<std::endl;
-	std::cout<<"helixseg a_excl: "<<helixseg->getHelixExcl()<<std::endl;
-	std::cout<<"helixseg a_incl: "<<helixseg->getHelixIncl()<<std::endl;
-
-	std::cout<<"helixseg Ea: "<<it->Ea()<<std::endl;
-	std::cout<<"helixseg Ea_excl: "<<helixseg->getErrorExcl()<<std::endl;
-	std::cout<<"helixseg Ea_incl: "<<helixseg->getErrorIncl()<<std::endl;
-
-	std::cout<<"helixseg layer: "<<it->layer()<<std::endl;
-      }    
-
-
-      helixseg->setTrackId(it->HitMdc()->rechitptr()->getTrkId());
-      helixseg->setMdcId(it->HitMdc()->rechitptr()->getMdcId());
-      helixseg->setFlagLR(it->HitMdc()->LR());
-      helixseg->setTdc(it->HitMdc()->rechitptr()->getTdc());
-      helixseg->setAdc(it->HitMdc()->rechitptr()->getAdc());
-      helixseg->setZhit(it->HitMdc()->rechitptr()->getZhit());
-      helixseg->setTof(it->tof());
-      helixseg->setDocaIncl(it->doca_include());
-      helixseg->setDocaExcl(it->doca_exclude());
-      helixseg->setDD(it->dd());
-      helixseg->setEntra(it->HitMdc()->rechitptr()->getEntra());
-      helixseg->setDT(it->dt());
-      //cout<<"setDT( "<<it->dt()<<" )"<<endl;
-      segcol->push_back(helixseg);
-      SmartRef<RecMdcKalHelixSeg> refhelixseg(helixseg);
-      helixsegrefvec.push_back(refhelixseg);
-      if(ntuple_&8){
-	m_docaInc = helixseg -> getDocaIncl();
-	m_docaExc = helixseg -> getDocaExcl();
-	m_residualInc = helixseg -> getResIncl();
-	m_residualExc = helixseg -> getResExcl();
-	m_dd = helixseg -> getDD();
-	m_lr = helixseg->getFlagLR();
-	m_tdrift = helixseg -> getDT();
-	m_layerid = helixseg -> getLayerId();
-	m_yposition= it->HitMdc()->wire().fwd().y();
-	m_eventNo = eventNo;
-	StatusCode sc6 = m_nt6->write();
-	if( sc6.isFailure() ) cout<<"Ntuple6 helixseg filling failed!"<<endl;
-
-      }
-    }
-
-    trk->setVecHelixSegs(helixsegrefvec, l_mass);
-    //cout<<"setVecHelixSegs with Kalman hits"<<endl;
-    if(debug_ == 4) {
-      std::cout<<"trk->getVecHelixSegs size..."<<(trk->getVecHelixSegs()).size()<<std::endl;
-    }
-    trk->setStat(0,1,l_mass);
-    trk->setChisq(track.chiSq_back(),1,l_mass);
-    trk->setNdf(track.ndf_back()-5,1,l_mass);
-    //   add setNhits ,maybe some problem
-    trk->setNhits(track.ndf_back(),l_mass);
-    if(!(track.ndf_back()==track.HelixSegs().size())) {
-      std::cout<<"THEY ARE NOT EQUALL!!!"<<std::endl;
-    } 
-    trk->setLength(track.pathip(),l_mass);
-    if(debug_ == 4) {
-      std::cout<<"l_mass "<<l_mass<<" path set as "<<track.pathip()<<endl;      
-    }   
-    trk->setTof(track.tof(),l_mass);
-    if (KalFitTrack::tofall_){
-      if(l_mass == 3) trk->setTof(track.tof_kaon(),l_mass);
-      if(l_mass == 4) trk->setTof(track.tof_proton(),l_mass);
-    }
-    // Path length in each MDC layer :
-    if (pathl_) 
-      for (int i = 0; i<43; i++) {
-	trk->setPathl(track.pathl()[i],i);
-      }
-    trk->setLHelix(track.a(),l_mass);
-    trk->setLError(track.Ea(),l_mass);
-    trk->setLPivot(track.pivot(),l_mass);
-
-    trk->setLPoint(track.point_last(),l_mass);
-    trk->setPathSM(track.getPathSM(),l_mass);
-    trk->setTof(track.getTofSM(),l_mass);
-    trk->setFiTerm(track.getFiTerm(),l_mass);
-    double a_trasan[5], ea_trasan[15];
-    for( int i =0 ; i <5; i++){
-      a_trasan[i] = TrasanTRK.helix[i];
-    }
-    for( int j =0 ; j <15; j++){
-      ea_trasan[j] = TrasanTRK.helix[j];
-    }
-    trk->setTHelix(a_trasan);
-    trk->setTError(ea_trasan);
-
-    if(4 == debug_){
-      std::cout<<" last pivot: "<< trk->getLPivot(0)<<std::endl;
-      std::cout<<" pathl in SM: "<< trk->getPathSM(0)<<std::endl;
-      std::cout<<" fiTerm: "<< trk->getFiTerm(0)<<std::endl;
-      std::cout<<" last point: "<< trk->getLPoint(0)<<std::endl;
-    }
-
-  } else {
-
-    if(debug_) cout<<"ALARM: FillTds_back Not refit with KalFilter!!!"<<endl;
-    // NOT refit with Kalman filter :
-    trk->setStat(1,1,l_mass);
-
-    HepPoint3D piv(TrasanTRK.pivot[0],
-	TrasanTRK.pivot[1],
-	TrasanTRK.pivot[2]);
-
-    HepVector a(5);
-    for(int i = 0; i < 5; i++)
-      a[i] = TrasanTRK.helix[i];
-
-    HepSymMatrix ea(5);
-    for(int i = 0, k = 0; i < 5; i++) {
-      for(int j = 0; j <= i; j++) {
-	ea[i][j] = matrixg_*TrasanTRK.error[k++];
-	ea[j][i] = ea[i][j];
-      }
-    }
-
-    KalFitTrack track_rep(piv, a, ea, lead_, 
-	TrasanTRK.chiSq, TrasanTRK.nhits);
-    double fiTerm = TrasanTRK.fiTerm;
-
-    double fi0 = track_rep.phi0();
-    HepPoint3D  xc(track_rep.kappa()/fabs(track_rep.kappa())* 
-	track_rep.center() );
-    double x = xc.x();
-    double y = xc.y();
-    double phi_x;
-    if( fabs( x ) > 1.0e-10 ){
-      phi_x = atan2( y, x );
-      if( phi_x < 0 ) phi_x += 2*M_PI;
-    } else {
-      phi_x = ( y > 0 ) ? M_PI_4: 3.0*M_PI_4;
-    }
-    if(debug_ == 4) cout<<"fiTerm "<<fiTerm<<" fi0 "<<fi0<<" phi_x "<<phi_x<<endl;
-    double dphi = fabs( fiTerm + fi0 - phi_x );
-    //if( dphi >= 2*M_PI ) dphi -= 2*M_PI;//yzhang delete 2014-03-29 
-    double tanl = track_rep.tanl();
-    double cosl_inv = sqrt( tanl*tanl + 1.0 );
-    if(debug_ == 4) { 
-      cout<<"tanl= "<<tanl<<" radius "<<track_rep.radius()<<" dphi "<<dphi<<endl;
-      cout<<" cosl_inv  "<<cosl_inv<<"  radius_numf  "<<track_rep.radius_numf()
-	<<endl;
-    }
-    //double track_len(fabs( track_rep.radius() * dphi * cosl_inv ));
-    double track_len(fabs( track_rep.radius() * fiTerm * cosl_inv )); // 2010-11-26 added by wangll
-    //cout<<"track radius : "<<track_rep.radius()<<"  "<<track.radius()<<endl;
-    if(debug_==4) cout<<__LINE__<<" max track len "<<track_len<<endl;
-    double light_speed( 29.9792458 );     // light speed in cm/nsec
-    double pt( 1.0 / track_rep.kappa() );
-    double p( pt * sqrt( 1.0 + tanl*tanl ) );
-
-
-    // chisq (2 : for backward filter)
-
-    trk->setStat(1,1,l_mass);
-    trk->setChisq(TrasanTRK.chiSq,1,l_mass);
-    if(debug_ == 4) { 
-      std::cout<<".....fillTds_back...chiSq..."<< TrasanTRK.chiSq<<std::endl;
-      std::cout<<"...track_len..."<<track_len<<" ndf[1] "<< trk->getNdf(0,l_mass)<<std::endl;
-    }    
-    trk->setNdf(TrasanTRK.nhits-5,1,l_mass);
-    trk->setLength(track_len,l_mass);
-    double mass_over_p( KalFitTrack::mass(l_mass)/ p );
-    double beta( 1.0 / sqrt( 1.0 + mass_over_p * mass_over_p ) );
-    trk->setTof(track_len / ( light_speed * beta ), l_mass) ;
-
-    //track_rep.pivot(IP);
-    HepPoint3D LPiovt = track_rep.x(fiTerm);
-    track_rep.pivot(LPiovt);
-
-    trk->setLHelix(track_rep.a(),l_mass);         
-    trk->setLError(track_rep.Ea(),l_mass);
-    //trk->setLPivot(track.pivot(),l_mass); // commented 2010-09-02
-    //trk->setLPivot(IP, l_mass); // add 2010-09-02
-    trk->setLPivot(LPiovt, l_mass); // add 2010-11-25
-
-    /// right???
-    trk->setLPoint(track.point_last(),l_mass);
-    //trk->setPathSM(track.getPathSM(),l_mass);// commented 2010-11-25 by wangll
-    trk->setPathSM(track_len,l_mass);// added 2010-11-25 by wangll
-    //trk->setTof(track.getTofSM(),l_mass);// commented 2010-11-25 by wangll
-    // trk->setFiTerm(track.getFiTerm(),l_mass); // commented 2010-11-25 by wangll
-    trk->setFiTerm(fiTerm,l_mass); // added by wangll 2010-11-25
-    trk->setTHelix(track_rep.a());         
-    trk->setTError(track_rep.Ea());
-
-    /*
-    // --- check track id   by wangll 2010-08-15
-    if(l_mass==lead_) {
-    //cout<<" ----- bad smooth track -----"<<endl;
-    //cout<<"l_mass = "<<l_mass<<endl;
-    int trkId = trk->trackId();
-    //
-    // cout<<"track id = "<<trkId<<endl;
-    // cout<<"THelix: "<<trk->getTHelix()<<endl;
-    // cout<<"FHelix: "<<trk->getFHelix()<<endl;
-    // cout<<"size of VecHelixSegs: "<<trk->getVecHelixSegs().size()<<endl;
-    // 
-    SmartDataPtr<RecMdcTrackCol> mdcTrkCol(eventSvc(),"/Event/Recon/RecMdcTrackCol");
-    //int nMdcTrk = mdcTrkCol.size();
-    //cout<<"number of Mdc Tracks: "<<nMdcTrk<<endl;
-    RecMdcTrackCol::iterator iter_mdcTrk = mdcTrkCol->begin();
-    bool findMdcTrk = false;
-    for(; iter_mdcTrk != mdcTrkCol->end(); iter_mdcTrk++) {
-    if(trkId==(*iter_mdcTrk)->trackId()) {
-    findMdcTrk = true;
-    break;
-    }
-    }
-    if(findMdcTrk) {
-    HitRefVec mdcVecHits = (*iter_mdcTrk)->getVecHits();
-    int nHits = mdcVecHits.size();
-    //cout<<"number of Mdc Hits: "<<nHits<<endl;
-    HelixSegRefVec helixsegrefvec;
-    HitRefVec::iterator iter_mdcHit = mdcVecHits.begin();
-    for(int iii=0; iter_mdcHit!=mdcVecHits.end(); iter_mdcHit++,iii++) {
-    RecMdcKalHelixSeg* helixseg = new RecMdcKalHelixSeg;
-    //cout<<"hit "<<iii<<endl;
-    //cout<<"getMdcId: "<<(*iter_mdcHit)->getMdcId()<<endl;
-    //cout<<"getAdc: "<<(*iter_mdcHit)->getAdc()<<endl;
-    //cout<<"getTdc: "<<(*iter_mdcHit)->getTdc()<<endl;
-    //cout<<"getDriftT: "<<(*iter_mdcHit)->getDriftT()<<endl;
-    //cout<<"getZhit: "<<(*iter_mdcHit)->getZhit()<<endl;
-    //cout<<"getFlagLR: "<<(*iter_mdcHit)->getFlagLR()<<endl;
-    //cout<<"getDriftDistLeft: "<<(*iter_mdcHit)->getDriftDistLeft()<<endl;
-    //cout<<"getDriftDistRight: "<<(*iter_mdcHit)->getDriftDistRight()<<endl;
-    //cout<<"getDoca: "<<(*iter_mdcHit)->getDoca()<<endl;
-    //cout<<"getEntra: "<<(*iter_mdcHit)->getEntra()<<endl;
-    // 
-    helixseg->setMdcId((*iter_mdcHit)->getMdcId());
-    helixseg->setAdc((*iter_mdcHit)->getAdc());
-    helixseg->setTdc((*iter_mdcHit)->getTdc());
-    helixseg->setZhit((*iter_mdcHit)->getZhit());
-    helixseg->setFlagLR((*iter_mdcHit)->getFlagLR());
-    if((*iter_mdcHit)->getFlagLR()==0) helixseg->setDD((*iter_mdcHit)->getDriftDistLeft());
-    if((*iter_mdcHit)->getFlagLR()==1) helixseg->setDD((*iter_mdcHit)->getDriftDistRight());
-    helixseg->setDocaIncl((*iter_mdcHit)->getDoca());
-    helixseg->setEntra((*iter_mdcHit)->getEntra());
-    helixseg->setDT((*iter_mdcHit)->getDriftT());
-    segcol->push_back(helixseg);
-    SmartRef<RecMdcKalHelixSeg> refhelixseg(helixseg);
-    helixsegrefvec.push_back(refhelixseg);
-    }
-    trk->setVecHelixSegs(helixsegrefvec); 
-    cout<<"setVecHelixSegs with Mdc hits"<<endl;
-    }
-    else cout<<"not find the Mdc Track!";	    
-    //cout<<"size of VecHelixSegs: "<<trk->getVecHelixSegs().size()<<endl;
-    }
-     */
-
-  }
-
-  // test--------
-  if(debug_ == 4) {
-    cout<<"Now let us see results after smoothering at IP:........."<<endl;
-    cout << " dr = " << track.a()[0] 
-      << ", Er_dr = " << sqrt(track.Ea()[0][0]) << std::endl;
-    cout<< " phi0 = " << track.a()[1] 
-      << ", Er_phi0 = " << sqrt(track.Ea()[1][1]) << std::endl;
-    cout << " PT = " << 1/track.a()[2] 
-      << ", Er_kappa = " << sqrt(track.Ea()[2][2]) << std::endl;
-    cout << " dz = " << track.a()[3] 
-      << ", Er_dz = " << sqrt(track.Ea()[3][3]) << std::endl;
-    cout << " tanl = " << track.a()[4] 
-      << ", Er_tanl = " << sqrt(track.Ea()[4][4]) << std::endl;
-    cout << " Ea = " << track.Ea() <<endl;
-  }
-  // test end ----------
-}
-
-//void KalFitAlg::FillTds_helixsegs(KalFitTrack& track,MdcRec_trk& rectrk )
-
 void KalFitAlg::sameas(RecMdcKalTrack* trk, int l_mass, int imain)
 {
   // note: for this function,only imain==lead(2) considered
@@ -2213,227 +1326,7 @@ void KalFitAlg::sameas(RecMdcKalTrack* trk, int l_mass, int imain)
   trk->setLError(trk->getFError(),l_mass);
 }
 
-
-void KalFitAlg::smoother_anal(KalFitTrack& track, int way)
-{
-  // retrieve Mdc  geometry information
-  IMdcGeomSvc* igeomsvc;
-  StatusCode sc = Gaudi::svcLocator()->service("MdcGeomSvc", igeomsvc);
-  if(sc==StatusCode::FAILURE) cout << "GeoSvc failing!!!!!!!SC=" << sc << endl;
-  MdcGeomSvc* geomsvc = dynamic_cast<MdcGeomSvc*>(igeomsvc);
-  if(!geomsvc){
-    std::cout<<"ERROR OCCUR when dynamic_cast in KalFitTrack.cxx !!"<<std::endl;
-  }
-
-  HepPoint3D ip(0,0,0);
-  if(m_usevtxdb==1){
-    Hep3Vector xorigin(0,0,0);
-    IVertexDbSvc*  vtxsvc;
-    Gaudi::svcLocator()->service("VertexDbSvc", vtxsvc);
-    if(vtxsvc->isVertexValid()){
-      double* dbv = vtxsvc->PrimaryVertex(); 
-      double*  vv = vtxsvc->SigmaPrimaryVertex();  
-      xorigin.setX(dbv[0]);
-      xorigin.setY(dbv[1]);
-      xorigin.setZ(dbv[2]);
-    }
-    ip[0] = xorigin[0];
-    ip[1] = xorigin[1];
-    ip[2] = xorigin[2];
-  }
-
-  // Estimation of the path length from ip to 1st cylinder
-
-  Helix work = *(Helix*)&track;
-  work.ignoreErrorMatrix();
-  work.pivot(ip);
-
-
-  double tanl = track.tanl();
-  double phi_old = work.phi0();
-  double phi = track.phi0();
-
-  if (fabs(phi - phi_old) > M_PI) {
-    if (phi > phi_old) phi -= 2 * M_PI;
-    else phi_old -= 2 * M_PI;
-  }
-
-  double path_zero = fabs(track.radius() * (phi_old-phi)* sqrt(1 + tanl * tanl));
-  // track.addPathSM(path_zero);
-
-
-  HepSymMatrix Eakal(5,0);
-  track.pivot(ip);
-  /// be attention to this inital error matrix of smoother,
-  /// how is track.Ea() in the next sentence when use it?
-  Eakal = track.Ea()*matrixg_;
-  track.Ea(Eakal);
-
-  // Mdc part :
-  unsigned int nhit = track.HitsMdc().size();
-  int layer_prev = -1;
-
-  HepVector pos_old(3,0);
-  double r0kal_prec(0);
-  int  nhits_read(0);
-  for( unsigned i=0 ; i < nhit; i++ ) {
-    int ihit = (nhit-1)-i;
-    KalFitHitMdc& HitMdc = track.HitMdc(ihit);
-    const KalFitWire& Wire = HitMdc.wire();
-
-    int wireid = Wire.geoID();
-    nhits_read++;
-
-    int layer = Wire.layer().layerId();
-    if (pathl_ && layer != layer_prev) {
-
-      if (debug_ == 4) cout<<"in smoother,layerid "<<layer<<"  layer_prev  "
-	<<layer_prev <<"  pathl_   "<<pathl_<<endl;
-
-      // track.PathL(Wire.layer().layerId());
-      layer_prev = layer;
-    }
-
-    HepPoint3D fwd(Wire.fwd());
-    HepPoint3D bck(Wire.bck());
-    Hep3Vector wire = (CLHEP::Hep3Vector)fwd - (CLHEP::Hep3Vector)bck;
-    Helix work = *(Helix*)&track;
-    work.ignoreErrorMatrix();
-    work.pivot((fwd + bck) * .5);
-    HepPoint3D x0kal = (work.x(0).z() - bck.z()) / wire.z() * wire + bck;
-
-    if(4 == debug_) std::cout<<" x0kal before sag: "<<x0kal<<std::endl;
-    if (wsag_ == 4){
-      Hep3Vector result;
-      const MdcGeoWire* geowire = geomsvc->Wire(wireid); 
-      double tension = geowire->Tension();
-
-      //std::cout<<" tension: "<<tension<<std::endl;
-      double zinit(x0kal.z()), lzx(Wire.lzx());
-
-      // double A(Wire.Acoef());
-      double A = 47.35E-6/tension;
-      double Zp = (zinit - bck.z())*lzx/wire.z();
-
-      if(4 == debug_){
-	std::cout<<" sag in smoother_anal: "<<std::endl;    
-	std::cout<<" x0kal.x(): "<<std::setprecision(10)<<x0kal.x()<<std::endl;
-	std::cout<<" wire.x()*(zinit-bck.z())/wire.z(): "<<std::setprecision(10)
-							   <<(wire.x()*(zinit-bck.z())/wire.z())<<std::endl;
-	std::cout<<"bck.x(): "<<std::setprecision(10)<<bck.x()<<std::endl;
-	std::cout<<" wire.x()*(zinit-bck.z())/wire.z() + bck.x(): "<<std::setprecision(10)
-								     <<(wire.x()*(zinit-bck.z())/wire.z() + bck.x())<<std::endl;
-      }
-
-      result.setX(wire.x()*(zinit-bck.z())/wire.z() + bck.x());
-      result.setY((A*(Zp-lzx)+wire.y()/lzx)*Zp+bck.y());
-      result.setZ((A*(2*Zp-lzx)*lzx+wire.y())/wire.z());
-
-      wire.setX(wire.x()/wire.z());
-      wire.setY(result.z());
-      wire.setZ(1);
-
-      x0kal.setX(result.x());
-      x0kal.setY(result.y());
-    }
-
-    if(4 == debug_) std::cout<<" x0kal after sag: "<<x0kal<<std::endl;
-
-    // If x0kal is after the inner wall and x0kal_prec before :
-    double r0kal = x0kal.perp();
-    if (debug_ == 4) {
-      cout<<"wire direction "<<wire<<endl;
-      cout<<"x0kal "<<x0kal<<endl;
-      cout<<"smoother::r0kal "<<r0kal<<"  r0kal_prec  "<<r0kal_prec <<endl;
-    }
-
-    // change PIVOT :
-    /*cout<<endl<<"before change pivot: "<<endl;//wangll
-      cout<<"track.pivot = "<<track.pivot()<<endl;//wangll
-      cout<<"track.helix = "<<track.a()<<endl;//wangll
-     */
-    double pathl(0);
-    track.pivot_numf(x0kal, pathl);
-    track.addPathSM(pathl);
-    /*cout<<endl<<"after change pivot: "<<endl;//wangll
-      cout<<"track.pivot = "<<track.pivot()<<endl;//wangll
-      cout<<"track.helix = "<<track.a()<<endl;//wangll
-     */
-
-    // calculate the tof time in this layer
-    double pmag( sqrt( 1.0 + track.a()[4]*track.a()[4]) / track.a()[2]);
-    double mass_over_p( track.mass()/ pmag );
-    double beta( 1.0 / sqrt( 1.0 + mass_over_p * mass_over_p ) );
-    double tofest = pathl / ( 29.9792458 * beta );
-    track.addTofSM(tofest);
-
-    // std::cout<<" in layer: "<<layer<<" pathl: "<<pathl<<" tof: "<<tofest<<std::endl;
-
-    if(KalFitElement::muls()) track.msgasmdc(pathl, way);
-    /*cout<<endl<<"after muls: "<<endl;//wangll
-      cout<<"track.pivot = "<<track.pivot()<<endl;//wangll
-      cout<<"track.helix = "<<track.a()<<endl;//wangll
-     */
-    if(!(way<0&&fabs(track.kappa())>1000.0)) {
-      if(KalFitElement::loss()) track.eloss(pathl, _BesKalmanFitMaterials[0], way);
-    }
-
-
-    // Add info hit wire :
-    /*cout<<endl<<"after eloss: "<<endl;//wangll
-      cout<<"track.pivot = "<<track.pivot()<<endl;//wangll
-      cout<<"track.helix = "<<track.a()<<endl;//wangll
-     */
-    if(fabs(track.kappa())>0&&fabs(track.kappa())<1000.0&&fabs(track.tanl())<7.02) {
-      HepVector Va(5,0);
-      HepSymMatrix Ma(5,0);
-      KalFitHelixSeg  HelixSeg(&HitMdc,x0kal,Va,Ma);   
-
-      Hep3Vector meas = track.momentum(0).cross(wire).unit();
-      double dchi2=-1; 
-      track.smoother_Mdc(HitMdc, meas, HelixSeg, dchi2, m_csmflag);
-      if(dchi2>0.0) {
-	track.HelixSegs().push_back(HelixSeg);
-      }
-    }
-
-    /// oh, to be the last hit 
-
-    if(i == nhit-1){
-
-      /// calculate the lsat point in MDC
-      HepPoint3D point;
-      point.setX(x0kal.x() + track.a()[0]*cos(track.a()[1]));
-      point.setY(x0kal.y() + track.a()[0]*sin(track.a()[1]));
-      point.setZ(x0kal.z() + track.a()[3]);
-      track.point_last(point);
-
-      /// calculate fiTerm
-      double phi_old = track.a()[1];
-      KalFitTrack temp(x0kal, track.a(), track.Ea(), 0, 0, 0);
-      temp.pivot(ip);
-      double phi_new = temp.a()[1];	  	 
-      double fi = phi_new - phi_old;
-      /// for protection purpose
-      //if(fabs(fi) >= CLHEP::twopi) fi = fmod(fi+2*CLHEP::twopi,CLHEP::twopi);
-
-      //if(fabs(fi) >= CLHEP::twopi) fi = fmod(fi+2*CLHEP::twopi,CLHEP::twopi);//yzhang add fiTerm 2pi cut 2014-04-12 
-      if(debug_>0 && fabs(fi) >= CLHEP::twopi) {
-	std::cout<<__FILE__<<"   "<<__LINE__<<" fiTerm>2pi !!! fi="<<fi<<std::endl;
-      }
-
-      track.fiTerm(fi);
-    }
-
-    if (debug_>4) cout<<"smoother_anal() track----7-----"<<track.a()<<endl;
-    r0kal_prec = r0kal;
-  }
-}
-
-
-
-void KalFitAlg::filter_fwd_anal(KalFitTrack& track, int l_mass, int way, HepSymMatrix& Eakal)
-{
+void KalFitAlg::filter_fwd_anal(KalFitTrack& track, int l_mass, int way, HepSymMatrix& Eakal) {
   //cout<<__LINE__<<" filter_fwd_anal helix: "<<track.a()<<" pivot "<<track.pivot()<<endl;
 
   // cout<<"**********************"<<endl;//wangll
@@ -2480,9 +1373,28 @@ void KalFitAlg::filter_fwd_anal(KalFitTrack& track, int l_mass, int way, HepSymM
       //fix innerwall ,layer No same and track length cut 10cm hit TEMP FIXME
       if(debug_ == 4) cout<<endl<<"for inner wall: layer "<<layerf<<" lastHitLayer "<<lastHitLayer<<" trackLength "<<trackLength<<" lastHitTrackLength "<<lastHitTrackLength<<" trackLenghtDiff "<<trackLength-lastHitTrackLength<<endl;
       if(b_secondTurn){
-	if(debug_ == 4) cout<<endl<<" hit ("<<layerf<<","<<Wire.localId()<<") fix inner wall: layer "<<layerf<<" lastHitLayer "<<lastHitLayer<<" trackLength "<<trackLength<<" lastHitTrackLength "<<lastHitTrackLength<<endl;
+	if(debug_ == 4){
+	  double phi0 = track.a()[1];
+	  double pxy = fabs(1./track.a()[2]);
+	  double tanl = track.a()[4];
+	  double px = pxy * (-sin(phi0));
+	  double py = pxy * cos(phi0);
+	  double pz = pxy * tanl;
+	  double ptot = sqrt(px*px+py*py+pz*pz);
+	  cout<<"before fix innerwall once p"<<ptot<<" helix:"<<track.a()<<", Ea:"<<track.Ea()<<endl;
+	  cout<<endl<<" hit ("<<layerf<<","<<Wire.localId()<<") fix inner wall: layer "<<layerf<<" lastHitLayer "<<lastHitLayer<<" trackLength "<<trackLength<<" lastHitTrackLength "<<lastHitTrackLength<<endl;
+	}
 	innerwall(track, l_mass, way); 
-	if(debug_ == 4) cout<<"after fix innerwall once helix:"<<track.a()<<", Ea:"<<track.Ea()<<endl;
+	if(debug_ == 4){
+	  double phi0 = track.a()[1];
+	  double pxy = fabs(1./track.a()[2]);
+	  double tanl = track.a()[4];
+	  double px = pxy * (-sin(phi0));
+	  double py = pxy * cos(phi0);
+	  double pz = pxy * tanl;
+	  double ptot = sqrt(px*px+py*py+pz*pz);
+	  cout<<"after fix innerwall once p"<<ptot<<" helix:"<<track.a()<<", Ea:"<<track.Ea()<<endl;
+	}
 	//HepPoint3D IP(0,0,0);//FIXME for track not from (0,0,0) target 
 	//track.pivot(IP,b_secondTurn);
 	if(debug_==4) std::cout<<__FILE__<<"   "<<__LINE__<<" change pivot by fltlen diff: "<<trackLength-lastHitTrackLength<<std::endl;
@@ -2490,7 +1402,16 @@ void KalFitAlg::filter_fwd_anal(KalFitTrack& track, int l_mass, int way, HepSymM
 
 	if(debug_==4) std::cout<<__FILE__<<"   "<<__LINE__<<" before fix innerwall pivot by fltLen "<<track.pivot()<<" helix: "<<track.a()<<std::endl;
 	innerwall(track, l_mass, way*-1); 
-	if(debug_ == 4) cout<<"after fix innerwall twice helix:"<<track.a()<<", Ea:"<<track.Ea()<<track.pivot()<<endl;
+	if(debug_ == 4) {
+	  double phi0 = track.a()[1];
+	  double pxy = fabs(1./track.a()[2]);
+	  double tanl = track.a()[4];
+	  double px = pxy * (-sin(phi0));
+	  double py = pxy * cos(phi0);
+	  double pz = pxy * tanl;
+	  double ptot = sqrt(px*px+py*py+pz*pz);
+	  cout<<"after fix innerwall twice helix:"<<track.a()<<", Ea:"<<track.Ea()<<track.pivot()<<" p "<<ptot<<endl;
+	}
 	//turnOverPi = true;
       }
       lastHitTrackLength = trackLength;
@@ -2605,6 +1526,8 @@ void KalFitAlg::filter_fwd_anal(KalFitTrack& track, int l_mass, int way, HepSymM
       if(debug_ == 4) {
 	cout<<"inext "<<inext<<",meas "<<meas<<",way "<<way<<",dch2 "<<dchi2<<",dtrack "<<dtrack<<",dtracknew "<<dtracknew<<",dtdc "<<dtdc<<endl;
       }
+
+      if(inext==1) track.fltLenTerm(HitMdc.rechitptr()->getFltLen());//cm//yzhang add 2014-07-01 
       double chi2 = track.update_hits(HitMdc,inext,meas,way,dchi2,dtrack,dtracknew,dtdc,m_csmflag);
       if(debug_ == 4) {
 	cout<<"after update_hits hit:("<<Wire.layer().layerId()<<","<<Wire.localId()<<") "<<endl;
@@ -2696,7 +1619,7 @@ void KalFitAlg::filter_fwd_anal(KalFitTrack& track, int l_mass, int way, HepSymM
     }
     r0kal_prec = r0kal;
   }// end of hits looping
-}
+}//end of filter_fwd_anal()
 
 
 
@@ -2725,9 +1648,7 @@ void KalFitAlg::innerwall(KalFitTrack& track, int l_mass, int way){
 
 
 // Use the information of trasan and refit the best tracks
-
-void KalFitAlg::kalman_fitting_anal(void)
-{
+void KalFitAlg::kalman_fitting_anal(void) {
 
   //cout<<"kalman_fitting_anal deal with a new event"<<endl;//wangll
 
@@ -2802,9 +1723,54 @@ void KalFitAlg::kalman_fitting_anal(void)
       return;
     }
   }
-
   RecMdcKalTrackCol* kalcol = new RecMdcKalTrackCol;   
+
+  IDataProviderSvc* evtSvc = NULL;
+  Gaudi::svcLocator()->service("EventDataSvc", evtSvc);
+  if (evtSvc) {
+    log << MSG::INFO << "makeTds:event Svc has been found" << endreq;
+  } else {
+    log << MSG::FATAL << "makeTds:Could not find eventSvc" << endreq;
+    return;
+    //return StatusCode::SUCCESS;
+  }
+
+  StatusCode kalsc;
+  IDataManagerSvc *dataManSvc;
+  dataManSvc= dynamic_cast<IDataManagerSvc*>(evtSvc);
+  DataObject *aKalTrackCol;
+  evtSvc->findObject("/Event/Recon/RecMdcKalTrackCol",aKalTrackCol);
+  if(aKalTrackCol != NULL) {
+    dataManSvc->clearSubTree("/Event/Recon/RecMdcKalTrackCol");
+    evtSvc->unregisterObject("/Event/Recon/RecMdcKalTrackCol");
+  }
+
+  kalsc = evtSvc->registerObject("/Event/Recon/RecMdcKalTrackCol", kalcol);
+  if( kalsc.isFailure() ) {
+    log << MSG::FATAL << "Could not register RecMdcKalTrack" << endreq;
+    //return StatusCode::SUCCESS;
+    return;
+  }
+  log << MSG::INFO << "RecMdcKalTrackCol registered successfully!" <<endreq;
+
+  DataObject *aKalHelixSegCol;
+  evtSvc->findObject("/Event/Recon/RecMdcKalHelixSegCol", aKalHelixSegCol);
+  if(aKalHelixSegCol != NULL){
+    dataManSvc->clearSubTree("/Event/Recon/RecMdcKalHelixSegCol");
+    evtSvc->unregisterObject("/Event/Recon/RecMdcKalHelixSegCol");
+  }
+  //RecMdcKalHelixSegCol *helixsegcol = new RecMdcKalHelixSegCol;  
   RecMdcKalHelixSegCol *segcol =new RecMdcKalHelixSegCol;
+  kalsc = evtSvc->registerObject("/Event/Recon/RecMdcKalHelixSegCol", segcol);
+  //kalsc = evtSvc->registerObject("/Event/Recon/RecMdcKalHelixSegCol", helixsegcol);
+  if( kalsc.isFailure()){
+    log<< MSG::FATAL << "Could not register RecMdcKalHelixSeg" <<endreq;
+    return;
+    //return StatusCode::SUCCESS;
+  }
+  log << MSG::INFO << "RecMdcKalHelixSegCol register successfully!" <<endreq;
+
+
   //make RecMdcKalTrackCol
   log << MSG::INFO << "beginning to make RecMdcKalTrackCol" <<endreq;     
   // Loop over tracks given by trasan :
@@ -2836,9 +1802,7 @@ void KalFitAlg::kalman_fitting_anal(void)
 	(TrasanTRK_add.decision & 64) == 64)      type = 1;
 
     // Initialisation : (x, a, ea)
-    HepPoint3D x(TrasanTRK.pivot[0],
-	TrasanTRK.pivot[1],
-	TrasanTRK.pivot[2]);
+    HepPoint3D x(TrasanTRK.pivot[0], TrasanTRK.pivot[1], TrasanTRK.pivot[2]);
     //cout<<"TrasanTRK.pivot: "<<x<<endl;
 
     HepVector a(5);
@@ -2906,6 +1870,9 @@ void KalFitAlg::kalman_fitting_anal(void)
 
       //  ATTENTION HERE!!!
       track_lead.appendHitsMdc( KalFitHitMdc(rechit.id, lr_decision, rechit.tdc, dist, erdist, _wire+(geo->Id()), rechit.rechitptr));
+      int layer = geo->Layer();//yzhang add for debug 2014-07-10 
+      int cell = geo->Cell();//yzhang add for debug 2014-07-10 
+      track_lead.HitMdc(hit_asso-1).pTruth(pTruthHit[layer][cell]);//yzhang add for debug 2014-07-10 
       // inner/outer layer :
       rStat[ind]++;
       if (inlyr>ind) inlyr = ind;
@@ -3019,51 +1986,51 @@ void KalFitAlg::kalman_fitting_anal(void)
   }
 
 
-  IDataProviderSvc* eventSvc = NULL;
-  Gaudi::svcLocator()->service("EventDataSvc", eventSvc);
-  if (eventSvc) {
-    log << MSG::INFO << "makeTds:event Svc has been found" << endreq;
-  } else {
-    log << MSG::FATAL << "makeTds:Could not find eventSvc" << endreq;
-    return ;
-  }
+  //IDataProviderSvc* eventSvc = NULL;
+  //Gaudi::svcLocator()->service("EventDataSvc", eventSvc);
+  //if (eventSvc) {
+  //  log << MSG::INFO << "makeTds:event Svc has been found" << endreq;
+  //} else {
+  //  log << MSG::FATAL << "makeTds:Could not find eventSvc" << endreq;
+  //  return ;
+  //}
 
-  StatusCode kalsc;
-  IDataManagerSvc *dataManSvc;
-  dataManSvc= dynamic_cast<IDataManagerSvc*>(eventSvc);
-  DataObject *aKalTrackCol;
-  eventSvc->findObject("/Event/Recon/RecMdcKalTrackCol",aKalTrackCol);
-  if(aKalTrackCol != NULL) {
-    dataManSvc->clearSubTree("/Event/Recon/RecMdcKalTrackCol");
-    eventSvc->unregisterObject("/Event/Recon/RecMdcKalTrackCol");
-  }
+  //StatusCode kalsc;
+  //IDataManagerSvc *dataManSvc;
+  //dataManSvc= dynamic_cast<IDataManagerSvc*>(eventSvc);
+  //DataObject *aKalTrackCol;
+  //eventSvc->findObject("/Event/Recon/RecMdcKalTrackCol",aKalTrackCol);
+  //if(aKalTrackCol != NULL) {
+  //  dataManSvc->clearSubTree("/Event/Recon/RecMdcKalTrackCol");
+  //  eventSvc->unregisterObject("/Event/Recon/RecMdcKalTrackCol");
+  //}
 
-  kalsc = eventSvc->registerObject("/Event/Recon/RecMdcKalTrackCol", kalcol);
-  if( kalsc.isFailure() ) {
-    log << MSG::FATAL << "Could not register RecMdcKalTrack" << endreq;
-    return ; 
-  }
-  log << MSG::INFO << "RecMdcKalTrackCol registered successfully!" <<endreq;
+  //kalsc = eventSvc->registerObject("/Event/Recon/RecMdcKalTrackCol", kalcol);
+  //if( kalsc.isFailure() ) {
+  //  log << MSG::FATAL << "Could not register RecMdcKalTrack" << endreq;
+  //  return ; 
+  //}
+  //log << MSG::INFO << "RecMdcKalTrackCol registered successfully!" <<endreq;
 
-  StatusCode segsc;
-  //check whether the RecMdcKalHelixSegCol has been already registered
-  DataObject *aRecKalSegEvent;
-  eventSvc->findObject("/Event/Recon/RecMdcKalHelixSegCol", aRecKalSegEvent);
-  if(aRecKalSegEvent!=NULL) {
-    //then unregister RecMdcKalHelixSegCol
-    segsc = eventSvc->unregisterObject("/Event/Recon/RecMdcKalHelixSegCol");
-    if(segsc != StatusCode::SUCCESS) {
-      log << MSG::FATAL << "Could not unregister RecMdcKalHelixSegCol collection" << endreq;
-      return;
-    }
-  }
+  //StatusCode segsc;
+  ////check whether the RecMdcKalHelixSegCol has been already registered
+  //DataObject *aRecKalSegEvent;
+  //eventSvc->findObject("/Event/Recon/RecMdcKalHelixSegCol", aRecKalSegEvent);
+  //if(aRecKalSegEvent!=NULL) {
+  //  //then unregister RecMdcKalHelixSegCol
+  //  segsc = eventSvc->unregisterObject("/Event/Recon/RecMdcKalHelixSegCol");
+  //  if(segsc != StatusCode::SUCCESS) {
+  //    log << MSG::FATAL << "Could not unregister RecMdcKalHelixSegCol collection" << endreq;
+  //    return;
+  //  }
+  //}
 
-  segsc = eventSvc->registerObject("/Event/Recon/RecMdcKalHelixSegCol", segcol);
-  if( segsc.isFailure() ) {
-    log << MSG::FATAL << "Could not register RecMdcKalHelixSeg" << endreq;
-    return;
-  }
-  log << MSG::INFO << "RecMdcKalHelixSegCol registered successfully!" <<endreq;
+  //segsc = eventSvc->registerObject("/Event/Recon/RecMdcKalHelixSegCol", segcol);
+  //if( segsc.isFailure() ) {
+  //  log << MSG::FATAL << "Could not register RecMdcKalHelixSeg" << endreq;
+  //  return;
+  //}
+  //log << MSG::INFO << "RecMdcKalHelixSegCol registered successfully!" <<endreq;
 
 
   double x1(0.),x2(0.),y1(0.),y2(0.),z1(0.),z2(0.),the1(0.),the2(0.),phi1(0.),phi2(0.),p1(0.),p2(0.);
@@ -3071,244 +2038,259 @@ void KalFitAlg::kalman_fitting_anal(void)
   double px1(0.),px2(0.),py1(0.),py2(0.),pz1(0.),pz2(0.),charge1(0.),charge2(0.);
 
   //check the result:RecMdcKalTrackCol   
-  SmartDataPtr<RecMdcKalTrackCol> kaltrkCol(eventSvc,"/Event/Recon/RecMdcKalTrackCol");
+  SmartDataPtr<RecMdcKalTrackCol> kaltrkCol(eventSvc(),"/Event/Recon/RecMdcKalTrackCol");
   if (!kaltrkCol) { 
     log << MSG::FATAL << "Could not find RecMdcKalTrackCol" << endreq;
     return;
-  }
-  log << MSG::INFO << "Begin to check RecMdcKalTrackCol"<<endreq; 
-  RecMdcKalTrackCol::iterator iter_trk = kaltrkCol->begin();
-  for( int jj=1; iter_trk != kaltrkCol->end(); iter_trk++,jj++) {
-    log << MSG::DEBUG << "retrieved MDC Kalmantrack:"
-      << "Track Id: " << (*iter_trk)->getTrackId()
-      << " Mass of the fit: "<< (*iter_trk)->getMass(2)<< endreq
-      << " Length of the track: "<< (*iter_trk)->getLength(2)
-      << "  Tof of the track: "<< (*iter_trk)->getTof(2) << endreq
-      << " Chisq of the fit: "<< (*iter_trk)->getChisq(0,2)
-      <<"  "<< (*iter_trk)->getChisq(1,2) << endreq
-      << "Ndf of the fit: "<< (*iter_trk)->getNdf(0,2)
-      <<"  "<< (*iter_trk)->getNdf(1,2) << endreq
-      << "Kappa " << (*iter_trk)->getZHelix()[2]
-      << endreq;
-    for( int i = 0; i<43; i++) {
-      log << MSG::DEBUG << "retrieved pathl["<<i<<"]= "
-	<< (*iter_trk)->getPathl(i) <<endreq;
-    }
+  }else{
+    log << MSG::INFO <<__LINE__ << "Begin to check RecMdcKalTrackCol"<<endreq; 
+    RecMdcKalTrackCol::iterator iter_trk = kaltrkCol->begin();
+    for( int jj=1; iter_trk != kaltrkCol->end(); iter_trk++,jj++) {
+      if(debug_>0){
+	cout << "retrieved MDC Kalmantrack:"
+	  << "Track Id: " << (*iter_trk)->getTrackId()
+	  << " nHits "<< (*iter_trk)->getNhits(0)
+	  << " Mass of the fit: "<< (*iter_trk)->getMass(0)
+	  << " Length of the track: "<< (*iter_trk)->getLength(0)
+	  << " Tof of the track: "<< (*iter_trk)->getTof(0)
+	  << " Chisq of the fit: "<< (*iter_trk)->getChisq(0,0)
+	  << "  "<< (*iter_trk)->getChisq(1,0) 
+	  << " Ndf of the fit: "<< (*iter_trk)->getNdf(0,0)
+	  << "  "<< (*iter_trk)->getNdf(1,0)
+	  << " Kappa " << (*iter_trk)->getZHelix()[0]
+	  << " fHelix Kappa" << (*iter_trk)->getFHelix()[0]
+	  << " zHelix " << (*iter_trk)->getZHelix()
+	  << endl;
 
-    if(ntuple_&1) {
-      //cout<<"fill ntuple 1"<<endl;
-      m_trackid = (*iter_trk)->getTrackId();
-      //cout<<"fill ntuple 2"<<endl;
+	HepVector zHelixE = (*iter_trk)->getZHelixE();
+	HepVector fHelixE = (*iter_trk)->getFHelixE();
+	cout << "zHelixE " << zHelixE << "fHelixE " << fHelixE <<endl;
+      }
+      //for( int i = 0; i<43; i++) {
+      //  log << MSG::DEBUG << "retrieved pathl["<<i<<"]= "
+      //    << (*iter_trk)->getPathl(i) << " ";
+      //  log<<endreq;
+      //}
 
-      for( int jj =0, iii=0; jj<5; jj++) {
 
-	m_length[jj] = (*iter_trk)->getLength(jj);
-	m_tof[jj] = (*iter_trk)->getTof(jj);
-	m_nhits[jj] = (*iter_trk)->getNhits(jj);
-	m_zhelix[jj] = (*iter_trk)->getZHelix()[jj];
-	m_zhelixe[jj] = (*iter_trk)->getZHelixE()[jj];
-	m_zhelixmu[jj] = (*iter_trk)->getZHelixMu()[jj];
-	m_zhelixk[jj] = (*iter_trk)->getZHelixK()[jj];
-	m_zhelixp[jj] = (*iter_trk)->getZHelixP()[jj];
-	m_fhelix[jj] = (*iter_trk)->getFHelix()[jj];
-	m_fhelixe[jj] = (*iter_trk)->getFHelixE()[jj];
-	m_fhelixmu[jj] = (*iter_trk)->getFHelixMu()[jj];
-	m_fhelixk[jj] = (*iter_trk)->getFHelixK()[jj];
-	m_fhelixp[jj] = (*iter_trk)->getFHelixP()[jj];
-	m_lhelix[jj] = (*iter_trk)->getLHelix()[jj];
-	m_lhelixe[jj] = (*iter_trk)->getLHelixE()[jj];
-	m_lhelixmu[jj] = (*iter_trk)->getLHelixMu()[jj];
-	m_lhelixk[jj] = (*iter_trk)->getLHelixK()[jj];
-	m_lhelixp[jj] = (*iter_trk)->getLHelixP()[jj];
 
-	if(ntuple_&32) {
-	  for(int kk=0; kk<=jj; kk++,iii++) {
-	    m_zerror[iii] = (*iter_trk)->getZError()[jj][kk];
-	    m_zerrore[iii] = (*iter_trk)->getZErrorE()[jj][kk];
-	    m_zerrormu[iii] = (*iter_trk)->getZErrorMu()[jj][kk];
-	    m_zerrork[iii] = (*iter_trk)->getZErrorK()[jj][kk];
-	    m_zerrorp[iii] = (*iter_trk)->getZErrorP()[jj][kk];
-	    m_ferror[iii] = (*iter_trk)->getFError()[jj][kk];
-	    m_ferrore[iii] = (*iter_trk)->getFErrorE()[jj][kk];
-	    m_ferrormu[iii] = (*iter_trk)->getFErrorMu()[jj][kk];
-	    m_ferrork[iii] = (*iter_trk)->getFErrorK()[jj][kk];
-	    m_ferrorp[iii] = (*iter_trk)->getFErrorP()[jj][kk];
-	    m_lerror[iii] = (*iter_trk)->getLError()[jj][kk];
-	    m_lerrore[iii] = (*iter_trk)->getLErrorE()[jj][kk];
-	    m_lerrormu[iii] = (*iter_trk)->getLErrorMu()[jj][kk];
-	    m_lerrork[iii] = (*iter_trk)->getLErrorK()[jj][kk];
-	    m_lerrorp[iii] = (*iter_trk)->getLErrorP()[jj][kk];
+      if(ntuple_&1) {
+	//cout<<"fill ntuple 1"<<endl;
+	m_trackid = (*iter_trk)->getTrackId();
+	//cout<<"fill ntuple 2"<<endl;
+
+	for( int jjj =0, iii=0; jjj<5; jjj++) {
+
+	  m_length[jjj] = (*iter_trk)->getLength(jjj);
+	  m_tof[jjj] = (*iter_trk)->getTof(jjj);
+	  m_nhits[jjj] = (*iter_trk)->getNhits(jjj);
+	  m_zhelix[jjj] = (*iter_trk)->getZHelix()[jjj];
+	  m_zhelixe[jjj] = (*iter_trk)->getZHelixE()[jjj];
+	  m_zhelixmu[jjj] = (*iter_trk)->getZHelixMu()[jjj];
+	  m_zhelixk[jjj] = (*iter_trk)->getZHelixK()[jjj];
+	  m_zhelixp[jjj] = (*iter_trk)->getZHelixP()[jjj];
+	  if(debug_>0)std::cout<<__FILE__<<"   "<<__LINE__<<" getFHelixE  "<<jjj<<" "<<(*iter_trk)->getFHelixE()[jjj]<<std::endl;
+	  m_fhelix[jjj] = (*iter_trk)->getFHelix()[jjj];
+	  m_fhelixe[jjj] = (*iter_trk)->getFHelixE()[jjj];
+	  m_fhelixmu[jjj] = (*iter_trk)->getFHelixMu()[jjj];
+	  m_fhelixk[jjj] = (*iter_trk)->getFHelixK()[jjj];
+	  m_fhelixp[jjj] = (*iter_trk)->getFHelixP()[jjj];
+	  m_lhelix[jjj] = (*iter_trk)->getLHelix()[jjj];
+	  m_lhelixe[jjj] = (*iter_trk)->getLHelixE()[jjj];
+	  m_lhelixmu[jjj] = (*iter_trk)->getLHelixMu()[jjj];
+	  m_lhelixk[jjj] = (*iter_trk)->getLHelixK()[jjj];
+	  m_lhelixp[jjj] = (*iter_trk)->getLHelixP()[jjj];
+
+	  if(ntuple_&32) {
+	    for(int kk=0; kk<=jjj; kk++,iii++) {
+	      m_zerror[iii] = (*iter_trk)->getZError()[jjj][kk];
+	      m_zerrore[iii] = (*iter_trk)->getZErrorE()[jjj][kk];
+	      m_zerrormu[iii] = (*iter_trk)->getZErrorMu()[jjj][kk];
+	      m_zerrork[iii] = (*iter_trk)->getZErrorK()[jjj][kk];
+	      m_zerrorp[iii] = (*iter_trk)->getZErrorP()[jjj][kk];
+	      m_ferror[iii] = (*iter_trk)->getFError()[jjj][kk];
+	      m_ferrore[iii] = (*iter_trk)->getFErrorE()[jjj][kk];
+	      m_ferrormu[iii] = (*iter_trk)->getFErrorMu()[jjj][kk];
+	      m_ferrork[iii] = (*iter_trk)->getFErrorK()[jjj][kk];
+	      m_ferrorp[iii] = (*iter_trk)->getFErrorP()[jjj][kk];
+	      m_lerror[iii] = (*iter_trk)->getLError()[jjj][kk];
+	      m_lerrore[iii] = (*iter_trk)->getLErrorE()[jjj][kk];
+	      m_lerrormu[iii] = (*iter_trk)->getLErrorMu()[jjj][kk];
+	      m_lerrork[iii] = (*iter_trk)->getLErrorK()[jjj][kk];
+	      m_lerrorp[iii] = (*iter_trk)->getLErrorP()[jjj][kk];
+	    }
 	  }
 	}
+	//cout<<"fill ntuple 3"<<endl;
+
+	// RootConversion changed in BOSS6.0, so use thefollowing:
+	m_chisq[0][0] = (*iter_trk)->getChisq(0,0);
+	m_chisq[1][0] = (*iter_trk)->getChisq(0,1);
+	m_chisq[2][0] = (*iter_trk)->getChisq(0,2);
+	m_chisq[3][0] = (*iter_trk)->getChisq(0,3);
+	m_chisq[4][0] = (*iter_trk)->getChisq(0,4);
+	m_chisq[0][1] = (*iter_trk)->getChisq(1,0);
+	m_chisq[1][1] = (*iter_trk)->getChisq(1,1);
+	m_chisq[2][1] = (*iter_trk)->getChisq(1,2);
+	m_chisq[3][1] = (*iter_trk)->getChisq(1,3);
+	m_chisq[4][1] = (*iter_trk)->getChisq(1,4);
+
+	m_ndf[0][0] = (*iter_trk)->getNdf(0,0);
+	m_ndf[1][0] = (*iter_trk)->getNdf(0,1);
+	m_ndf[2][0] = (*iter_trk)->getNdf(0,2);
+	m_ndf[3][0] = (*iter_trk)->getNdf(0,3);
+	m_ndf[4][0] = (*iter_trk)->getNdf(0,4);
+	m_ndf[0][1] = (*iter_trk)->getNdf(1,0);
+	m_ndf[1][1] = (*iter_trk)->getNdf(1,1);
+	m_ndf[2][1] = (*iter_trk)->getNdf(1,2);
+	m_ndf[3][1] = (*iter_trk)->getNdf(1,3);
+	m_ndf[4][1] = (*iter_trk)->getNdf(1,4);
+
+	m_stat[0][0] = (*iter_trk)->getStat(0,0);
+	m_stat[1][0] = (*iter_trk)->getStat(0,1);
+	m_stat[2][0] = (*iter_trk)->getStat(0,2);
+	m_stat[3][0] = (*iter_trk)->getStat(0,3);
+	m_stat[4][0] = (*iter_trk)->getStat(0,4);
+	m_stat[0][1] = (*iter_trk)->getStat(1,0);
+	m_stat[1][1] = (*iter_trk)->getStat(1,1);
+	m_stat[2][1] = (*iter_trk)->getStat(1,2);
+	m_stat[3][1] = (*iter_trk)->getStat(1,3);
+	m_stat[4][1] = (*iter_trk)->getStat(1,4);
+	//cout<<"fill ntuple 4"<<endl;
+
+	m_fptot = sqrt(1+pow(m_fhelix[4],2))/m_fhelix[2];
+	m_fptote = sqrt(1+pow(m_fhelixe[4],2))/m_fhelixe[2];
+	m_fptotmu = sqrt(1+pow(m_fhelixmu[4],2))/m_fhelixmu[2];
+	m_fptotk = sqrt(1+pow(m_fhelixk[4],2))/m_fhelixk[2];
+	m_fptotp = sqrt(1+pow(m_fhelixp[4],2))/m_fhelixp[2];
+
+	m_lptot = sqrt(1+pow(m_lhelix[4],2))/m_lhelix[2];
+	m_lptote = sqrt(1+pow(m_lhelixe[4],2))/m_lhelixe[2];
+	m_lptotmu = sqrt(1+pow(m_lhelixmu[4],2))/m_lhelixmu[2];
+	m_lptotk = sqrt(1+pow(m_lhelixk[4],2))/m_lhelixk[2];
+	m_lptotp = sqrt(1+pow(m_lhelixp[4],2))/m_lhelixp[2];
+
+	m_lpt = 1/m_lhelix[2];
+	m_lpte = 1/m_lhelixe[2];
+	m_lptmu = 1/m_lhelixmu[2];
+	m_lptk = 1/m_lhelixk[2];
+	m_lptp = 1/m_lhelixp[2];
+
+	m_fpt = 1/m_fhelix[2];
+	m_fpte = 1/m_fhelixe[2];
+	m_fptmu = 1/m_fhelixmu[2];
+	m_fptk = 1/m_fhelixk[2];
+	m_fptp = 1/m_fhelixp[2];
+	//cout<<"fill ntuple 5"<<endl;
+
+	if(debug_ >= 3){   
+	  std::cout<<"                                           "<<std::endl;
+	  std::cout<<"in file Kalman_fitting_anal ,the  m_fpt is .."<<m_fpt<<std::endl;
+	  std::cout<<"in file Kalman_fitting_anal ,the  m_fpte is .."<<m_fpte<<std::endl;
+	  std::cout<<"in file Kalman_fitting_anal ,the  m_fptmu is .."<<m_fptmu<<std::endl;
+	  std::cout<<"in file Kalman_fitting_anal ,the  m_fptk is .."<<m_fptk<<std::endl;
+	  std::cout<<"in file Kalman_fitting_anal ,the  m_fptp is .."<<m_fptp<<std::endl;
+	}
+
+	m_zpt = 1/m_zhelix[2];
+	m_zpte = 1/m_zhelixe[2];
+	m_zptmu = 1/m_zhelixmu[2];
+	m_zptk = 1/m_zhelixk[2];
+	m_zptp = 1/m_zhelixp[2];
+
+	if(debug_ >= 3) {
+	  std::cout<<"in file Kalman_fitting_anal ,the  m_zpt is .."<<m_zpt<<std::endl;
+	  std::cout<<"in file Kalman_fitting_anal ,the  m_zpte is .."<<m_zpte<<std::endl; 
+	  std::cout<<"in file Kalman_fitting_anal ,the  m_zptmu is .."<<m_zptmu<<std::endl;
+	  std::cout<<"in file Kalman_fitting_anal ,the  m_zptk is .."<<m_zptk<<std::endl;   
+	  std::cout<<"in file Kalman_fitting_anal ,the  m_zptp is .."<<m_zptp<<std::endl;                                           
+	}
+	m_zptot = sqrt(1+pow(m_zhelix[4],2))/m_zhelix[2];
+	m_zptote = sqrt(1+pow(m_zhelixe[4],2))/m_zhelixe[2];
+	m_zptotmu = sqrt(1+pow(m_zhelixmu[4],2))/m_zhelixmu[2];
+	m_zptotk = sqrt(1+pow(m_zhelixk[4],2))/m_zhelixk[2];
+	m_zptotp = sqrt(1+pow(m_zhelixp[4],2))/m_zhelixp[2];
+	//cout<<"fill ntuple 6"<<endl;
+
+	if(debug_ >= 3) {
+	  std::cout<<"in file Kalman_fitting_anal ,the  m_zptot is .."<<m_zptot<<std::endl;
+	  std::cout<<"in file Kalman_fitting_anal ,the  m_zptote is .."<<m_zptote<<std::endl;   
+	  std::cout<<"in file Kalman_fitting_anal ,the  m_zptotmu is .."<<m_zptotmu<<std::endl;
+	  std::cout<<"in file Kalman_fitting_anal ,the  m_zptotk is .."<<m_zptotk<<std::endl;   
+	  std::cout<<"in file Kalman_fitting_anal ,the  m_zptotp is .."<<m_zptotp<<std::endl;
+	}
+
+	if(ntuple_&32) {
+	  m_zsigp = sqrt(pow((m_zptot/m_zhelix[2]),2)*m_zerror[5]+
+	      pow((m_zhelix[4]/m_zptot),2)*pow((1/m_zhelix[2]),4)*m_zerror[14]-
+	      2*m_zhelix[4]*m_zerror[12]*pow((1/m_zhelix[2]),3));
+	  m_zsigpe = sqrt(pow((m_zptote/m_zhelixe[2]),2)*m_zerrore[5]+
+	      pow((m_zhelixe[4]/m_zptote),2)*pow((1/m_zhelixe[2]),4)*m_zerrore[14]-
+	      2*m_zhelixe[4]*m_zerrore[12]*pow((1/m_zhelixe[2]),3));
+	  m_zsigpmu = sqrt(pow((m_zptotmu/m_zhelixmu[2]),2)*m_zerrormu[5]+
+	      pow((m_zhelixmu[4]/m_zptotmu),2)*pow((1/m_zhelixmu[2]),4)*m_zerrormu[14]-
+	      2*m_zhelixmu[4]*m_zerrormu[12]*pow((1/m_zhelixmu[2]),3));
+	  m_zsigpk = sqrt(pow((m_zptotk/m_zhelixk[2]),2)*m_zerrork[5]+
+	      pow((m_zhelixk[4]/m_zptotk),2)*pow((1/m_zhelixk[2]),4)*m_zerrork[14]-
+	      2*m_zhelixk[4]*m_zerrork[12]*pow((1/m_zhelixk[2]),3));
+	  m_zsigpp = sqrt(pow((m_zptotp/m_zhelixp[2]),2)*m_zerrorp[5]+
+	      pow((m_zhelixp[4]/m_zptotp),2)*pow((1/m_zhelixp[2]),4)*m_zerrorp[14]-
+	      2*m_zhelixp[4]*m_zerrorp[12]*pow((1/m_zhelixp[2]),3));
+	}
+
+	StatusCode sc1 = m_nt1->write();
+	if( sc1.isFailure() ) cout<<"Ntuple1 filling failed!"<<endl;     
       }
-      //cout<<"fill ntuple 3"<<endl;
 
-      // RootConversion changed in BOSS6.0, so use thefollowing:
-      m_chisq[0][0] = (*iter_trk)->getChisq(0,0);
-      m_chisq[1][0] = (*iter_trk)->getChisq(0,1);
-      m_chisq[2][0] = (*iter_trk)->getChisq(0,2);
-      m_chisq[3][0] = (*iter_trk)->getChisq(0,3);
-      m_chisq[4][0] = (*iter_trk)->getChisq(0,4);
-      m_chisq[0][1] = (*iter_trk)->getChisq(1,0);
-      m_chisq[1][1] = (*iter_trk)->getChisq(1,1);
-      m_chisq[2][1] = (*iter_trk)->getChisq(1,2);
-      m_chisq[3][1] = (*iter_trk)->getChisq(1,3);
-      m_chisq[4][1] = (*iter_trk)->getChisq(1,4);
+      if(ntuple_&4) {
+	if(jj == 1) {
+	  phi1 = (*iter_trk)->getFFi0();
+	  r1 = (*iter_trk)->getFDr();
+	  z1 = (*iter_trk)->getFDz();	
+	  kap1 = (*iter_trk)->getFCpa();	
+	  tanl1 = (*iter_trk)->getFTanl();	
+	  charge1 = kap1/fabs(kap1);
+	  x1 = r1*cos(phi1);
+	  y1 = r1*sin(phi1);
+	  p1 = sqrt(1+tanl1*tanl1)/kap1;
+	  the1 = M_PI/2-atan(tanl1);
+	  px1 = -sin(phi1)/fabs(kap1);
+	  py1 = cos(phi1)/fabs(kap1);
+	  pz1= tanl1/fabs(kap1);
 
-      m_ndf[0][0] = (*iter_trk)->getNdf(0,0);
-      m_ndf[1][0] = (*iter_trk)->getNdf(0,1);
-      m_ndf[2][0] = (*iter_trk)->getNdf(0,2);
-      m_ndf[3][0] = (*iter_trk)->getNdf(0,3);
-      m_ndf[4][0] = (*iter_trk)->getNdf(0,4);
-      m_ndf[0][1] = (*iter_trk)->getNdf(1,0);
-      m_ndf[1][1] = (*iter_trk)->getNdf(1,1);
-      m_ndf[2][1] = (*iter_trk)->getNdf(1,2);
-      m_ndf[3][1] = (*iter_trk)->getNdf(1,3);
-      m_ndf[4][1] = (*iter_trk)->getNdf(1,4);
-
-      m_stat[0][0] = (*iter_trk)->getStat(0,0);
-      m_stat[1][0] = (*iter_trk)->getStat(0,1);
-      m_stat[2][0] = (*iter_trk)->getStat(0,2);
-      m_stat[3][0] = (*iter_trk)->getStat(0,3);
-      m_stat[4][0] = (*iter_trk)->getStat(0,4);
-      m_stat[0][1] = (*iter_trk)->getStat(1,0);
-      m_stat[1][1] = (*iter_trk)->getStat(1,1);
-      m_stat[2][1] = (*iter_trk)->getStat(1,2);
-      m_stat[3][1] = (*iter_trk)->getStat(1,3);
-      m_stat[4][1] = (*iter_trk)->getStat(1,4);
-      //cout<<"fill ntuple 4"<<endl;
-
-      m_fptot = sqrt(1+pow(m_fhelix[4],2))/m_fhelix[2];
-      m_fptote = sqrt(1+pow(m_fhelixe[4],2))/m_fhelixe[2];
-      m_fptotmu = sqrt(1+pow(m_fhelixmu[4],2))/m_fhelixmu[2];
-      m_fptotk = sqrt(1+pow(m_fhelixk[4],2))/m_fhelixk[2];
-      m_fptotp = sqrt(1+pow(m_fhelixp[4],2))/m_fhelixp[2];
-
-      m_lptot = sqrt(1+pow(m_lhelix[4],2))/m_lhelix[2];
-      m_lptote = sqrt(1+pow(m_lhelixe[4],2))/m_lhelixe[2];
-      m_lptotmu = sqrt(1+pow(m_lhelixmu[4],2))/m_lhelixmu[2];
-      m_lptotk = sqrt(1+pow(m_lhelixk[4],2))/m_lhelixk[2];
-      m_lptotp = sqrt(1+pow(m_lhelixp[4],2))/m_lhelixp[2];
-
-      m_lpt = 1/m_lhelix[2];
-      m_lpte = 1/m_lhelixe[2];
-      m_lptmu = 1/m_lhelixmu[2];
-      m_lptk = 1/m_lhelixk[2];
-      m_lptp = 1/m_lhelixp[2];
-
-      m_fpt = 1/m_fhelix[2];
-      m_fpte = 1/m_fhelixe[2];
-      m_fptmu = 1/m_fhelixmu[2];
-      m_fptk = 1/m_fhelixk[2];
-      m_fptp = 1/m_fhelixp[2];
-      //cout<<"fill ntuple 5"<<endl;
-
-      if(debug_ >= 3){   
-	std::cout<<"                                           "<<std::endl;
-	std::cout<<"in file Kalman_fitting_anal ,the  m_fpt is .."<<m_fpt<<std::endl;
-	std::cout<<"in file Kalman_fitting_anal ,the  m_fpte is .."<<m_fpte<<std::endl;
-	std::cout<<"in file Kalman_fitting_anal ,the  m_fptmu is .."<<m_fptmu<<std::endl;
-	std::cout<<"in file Kalman_fitting_anal ,the  m_fptk is .."<<m_fptk<<std::endl;
-	std::cout<<"in file Kalman_fitting_anal ,the  m_fptp is .."<<m_fptp<<std::endl;
+	} else if(jj == 2) {
+	  phi2 = (*iter_trk)->getFFi0();
+	  r2 = (*iter_trk)->getFDr();
+	  z2 = (*iter_trk)->getFDz();	
+	  kap2 = (*iter_trk)->getFCpa();	
+	  tanl2 = (*iter_trk)->getFTanl();	
+	  charge2 = kap2/fabs(kap2);
+	  x2 = r1*cos(phi2);
+	  y2 = r1*sin(phi2);
+	  p2 = sqrt(1+tanl2*tanl2)/kap1;
+	  the2 = M_PI/2-atan(tanl2);
+	  px2 = -sin(phi2)/fabs(kap2);
+	  py2 = cos(phi2)/fabs(kap2);
+	  pz2= tanl2/fabs(kap2);
+	}
       }
 
-      m_zpt = 1/m_zhelix[2];
-      m_zpte = 1/m_zhelixe[2];
-      m_zptmu = 1/m_zhelixmu[2];
-      m_zptk = 1/m_zhelixk[2];
-      m_zptp = 1/m_zhelixp[2];
+      if(ntuple_&4) {
+	m_delx = x1 - x2;
+	m_dely = y1 - y2;
+	m_delz = z1 - z2;
+	m_delthe = the1 + the2;
+	m_delphi = phi1- phi2;
+	m_delp = p1 - p2;
+	m_delpx = charge1*fabs(px1) + charge2*fabs(px2);
+	m_delpy = charge1*fabs(py1) + charge2*fabs(py2);
+	m_delpz = charge1*fabs(pz1) + charge2*fabs(pz2);
 
-      if(debug_ >= 3) {
-	std::cout<<"in file Kalman_fitting_anal ,the  m_zpt is .."<<m_zpt<<std::endl;
-	std::cout<<"in file Kalman_fitting_anal ,the  m_zpte is .."<<m_zpte<<std::endl; 
-	std::cout<<"in file Kalman_fitting_anal ,the  m_zptmu is .."<<m_zptmu<<std::endl;
-	std::cout<<"in file Kalman_fitting_anal ,the  m_zptk is .."<<m_zptk<<std::endl;   
-	std::cout<<"in file Kalman_fitting_anal ,the  m_zptp is .."<<m_zptp<<std::endl;                                           
-      }
-      m_zptot = sqrt(1+pow(m_zhelix[4],2))/m_zhelix[2];
-      m_zptote = sqrt(1+pow(m_zhelixe[4],2))/m_zhelixe[2];
-      m_zptotmu = sqrt(1+pow(m_zhelixmu[4],2))/m_zhelixmu[2];
-      m_zptotk = sqrt(1+pow(m_zhelixk[4],2))/m_zhelixk[2];
-      m_zptotp = sqrt(1+pow(m_zhelixp[4],2))/m_zhelixp[2];
-      //cout<<"fill ntuple 6"<<endl;
-
-      if(debug_ >= 3) {
-	std::cout<<"in file Kalman_fitting_anal ,the  m_zptot is .."<<m_zptot<<std::endl;
-	std::cout<<"in file Kalman_fitting_anal ,the  m_zptote is .."<<m_zptote<<std::endl;   
-	std::cout<<"in file Kalman_fitting_anal ,the  m_zptotmu is .."<<m_zptotmu<<std::endl;
-	std::cout<<"in file Kalman_fitting_anal ,the  m_zptotk is .."<<m_zptotk<<std::endl;   
-	std::cout<<"in file Kalman_fitting_anal ,the  m_zptotp is .."<<m_zptotp<<std::endl;
-      }
-
-      if(ntuple_&32) {
-	m_zsigp = sqrt(pow((m_zptot/m_zhelix[2]),2)*m_zerror[5]+
-	    pow((m_zhelix[4]/m_zptot),2)*pow((1/m_zhelix[2]),4)*m_zerror[14]-
-	    2*m_zhelix[4]*m_zerror[12]*pow((1/m_zhelix[2]),3));
-	m_zsigpe = sqrt(pow((m_zptote/m_zhelixe[2]),2)*m_zerrore[5]+
-	    pow((m_zhelixe[4]/m_zptote),2)*pow((1/m_zhelixe[2]),4)*m_zerrore[14]-
-	    2*m_zhelixe[4]*m_zerrore[12]*pow((1/m_zhelixe[2]),3));
-	m_zsigpmu = sqrt(pow((m_zptotmu/m_zhelixmu[2]),2)*m_zerrormu[5]+
-	    pow((m_zhelixmu[4]/m_zptotmu),2)*pow((1/m_zhelixmu[2]),4)*m_zerrormu[14]-
-	    2*m_zhelixmu[4]*m_zerrormu[12]*pow((1/m_zhelixmu[2]),3));
-	m_zsigpk = sqrt(pow((m_zptotk/m_zhelixk[2]),2)*m_zerrork[5]+
-	    pow((m_zhelixk[4]/m_zptotk),2)*pow((1/m_zhelixk[2]),4)*m_zerrork[14]-
-	    2*m_zhelixk[4]*m_zerrork[12]*pow((1/m_zhelixk[2]),3));
-	m_zsigpp = sqrt(pow((m_zptotp/m_zhelixp[2]),2)*m_zerrorp[5]+
-	    pow((m_zhelixp[4]/m_zptotp),2)*pow((1/m_zhelixp[2]),4)*m_zerrorp[14]-
-	    2*m_zhelixp[4]*m_zerrorp[12]*pow((1/m_zhelixp[2]),3));
-      }
-
-      StatusCode sc1 = m_nt1->write();
-      if( sc1.isFailure() ) cout<<"Ntuple1 filling failed!"<<endl;     
-    }
-
-    if(ntuple_&4) {
-      if(jj == 1) {
-	phi1 = (*iter_trk)->getFFi0();
-	r1 = (*iter_trk)->getFDr();
-	z1 = (*iter_trk)->getFDz();	
-	kap1 = (*iter_trk)->getFCpa();	
-	tanl1 = (*iter_trk)->getFTanl();	
-	charge1 = kap1/fabs(kap1);
-	x1 = r1*cos(phi1);
-	y1 = r1*sin(phi1);
-	p1 = sqrt(1+tanl1*tanl1)/kap1;
-	the1 = M_PI/2-atan(tanl1);
-	px1 = -sin(phi1)/fabs(kap1);
-	py1 = cos(phi1)/fabs(kap1);
-	pz1= tanl1/fabs(kap1);
-
-      } else if(jj == 2) {
-	phi2 = (*iter_trk)->getFFi0();
-	r2 = (*iter_trk)->getFDr();
-	z2 = (*iter_trk)->getFDz();	
-	kap2 = (*iter_trk)->getFCpa();	
-	tanl2 = (*iter_trk)->getFTanl();	
-	charge2 = kap2/fabs(kap2);
-	x2 = r1*cos(phi2);
-	y2 = r1*sin(phi2);
-	p2 = sqrt(1+tanl2*tanl2)/kap1;
-	the2 = M_PI/2-atan(tanl2);
-	px2 = -sin(phi2)/fabs(kap2);
-	py2 = cos(phi2)/fabs(kap2);
-	pz2= tanl2/fabs(kap2);
-      }
-    }
+	StatusCode sc2 = m_nt2->write();
+	if( sc2.isFailure() ) cout<<"Ntuple2 filling failed!"<<endl;      
+      } 
+    }//end of loop over RecMdcKalTrack
   }
-  if(ntuple_&4) {
-    m_delx = x1 - x2;
-    m_dely = y1 - y2;
-    m_delz = z1 - z2;
-    m_delthe = the1 + the2;
-    m_delphi = phi1- phi2;
-    m_delp = p1 - p2;
-    m_delpx = charge1*fabs(px1) + charge2*fabs(px2);
-    m_delpy = charge1*fabs(py1) + charge2*fabs(py2);
-    m_delpz = charge1*fabs(pz1) + charge2*fabs(pz2);
-
-    StatusCode sc2 = m_nt2->write();
-    if( sc2.isFailure() ) cout<<"Ntuple2 filling failed!"<<endl;      
-  } 
 
   delete [] order;
   delete [] rCont;
@@ -3317,15 +2299,10 @@ void KalFitAlg::kalman_fitting_anal(void)
 
   if (debug_ == 4)
     cout << "Kalfitting finished " << std::endl;
-}
+}//end of kalman_fitting_anal
 
 
-void KalFitAlg::complete_track(MdcRec_trk& TrasanTRK, 
-    MdcRec_trk_add& TrasanTRK_add, 
-    KalFitTrack& track_lead,
-    RecMdcKalTrack*  kaltrk,
-    RecMdcKalTrackCol* kalcol,RecMdcKalHelixSegCol *segcol,int flagsmooth) 
-{
+void KalFitAlg::complete_track(MdcRec_trk& TrasanTRK, MdcRec_trk_add& TrasanTRK_add, KalFitTrack& track_lead, RecMdcKalTrack*  kaltrk, RecMdcKalTrackCol* kalcol,RecMdcKalHelixSegCol *segcol,int flagsmooth) {
   static int nmass = KalFitTrack::nmass();
   int way(1);
   MsgStream log(msgSvc(), name());
@@ -3344,8 +2321,7 @@ void KalFitAlg::complete_track(MdcRec_trk& TrasanTRK,
 
   if(!(i_front_<0)){
 
-    for(int l_mass = 0, flg = 1; l_mass < nmass;
-	l_mass++, flg <<= 1) {
+    for(int l_mass = 0, flg = 1; l_mass < nmass; l_mass++, flg <<= 1) {
 
       if (!(mhyp_ & flg)) continue;
       //yzhang delete lead 2014-06-25 
@@ -3372,6 +2348,8 @@ void KalFitAlg::complete_track(MdcRec_trk& TrasanTRK,
 
       KalFitTrack track(x_trasan,a_trasan, ea_trasan, l_mass, chiSq, nhits);
       track.HitsMdc(track_lead.HitsMdc());	
+
+
       double fiTerm = TrasanTRK.fiTerm;
       if(debug_ == 4)
       {
@@ -3409,92 +2387,94 @@ void KalFitAlg::complete_track(MdcRec_trk& TrasanTRK,
 
       init_matrix(choice_,TrasanTRK, Eakal);
       filter_fwd_anal(track, l_mass, way, Eakal);
-      KalFitTrack track_z(track);
-      ///fill tds  with results got at (0,0,0)  
-      innerwall(track_z, l_mass, way);     
-      fillTds_ip(TrasanTRK, track_z, kaltrk, l_mass);  
+
       // Fill tds
       fillTds(TrasanTRK, track, kaltrk, l_mass);     
+
+      ///fill tds  with results got at (0,0,0)  
+      KalFitTrack track_z(track);
+      innerwall(track_z, l_mass, way);     
+      fillTds_ip(TrasanTRK, track_z, kaltrk, l_mass);  
     }
   } // end of //end of if (!(i_front<0))
 
 
-  // Refit with an enhancement of the error matrix at Mdc level :
-  if (enhance_) {
+  //// Refit with an enhancement of the error matrix at Mdc level :
+  //if (enhance_) {
 
-    HepPoint3D x_first(0, 0, 0);
-    HepVector a_first(kaltrk->getFHelix());
-    HepSymMatrix ea_first(kaltrk->getFError());
-    HepVector fac(5);
-    fac[0]=fac_h1_; fac[1]=fac_h2_; fac[2]=fac_h3_; fac[3]=fac_h4_; fac[4]=fac_h5_;
-    for(int i = 0; i < 5; i++)
-      for(int j = 0; j <= i; j++)
-	ea_first[i][j] = fac[i]*fac[j]*ea_first[i][j];
-    KalFitTrack track(x_first, a_first, ea_first, 2, 0, 0);
-  }
+  //  HepPoint3D x_first(0, 0, 0);
+  //  HepVector a_first(kaltrk->getFHelix());
+  //  HepSymMatrix ea_first(kaltrk->getFError());
+  //  HepVector fac(5);
+  //  fac[0]=fac_h1_; fac[1]=fac_h2_; fac[2]=fac_h3_; fac[3]=fac_h4_; fac[4]=fac_h5_;
+  //  for(int i = 0; i < 5; i++)
+  //    for(int j = 0; j <= i; j++)
+  //      ea_first[i][j] = fac[i]*fac[j]*ea_first[i][j];
+  //  KalFitTrack track(x_first, a_first, ea_first, 2, 0, 0);
+  //}
 
-  // Backward filter :  
-  KalFitTrack track_back(track_lead);
-  if (debug_ == 4) {
-    cout << " Backward fitting flag:" << back_<< endl;
-    cout << "track_back pivot " << track_back.pivot() 
-      << " track_lead kappa " << track_lead.a()[2]
-      <<endl;
-  }
+  //// Backward filter :  
+  //KalFitTrack track_back(track_lead);
+  //if (debug_ == 4) {
+  //  cout << " Backward fitting flag:" << back_<< endl;
+  //  cout << "track_back pivot " << track_back.pivot() 
+  //    << " track_lead kappa " << track_lead.a()[2]
+  //    <<endl;
+  //}
 
-  if (back_ && track_lead.a()[2] != 0 && 
-      1/fabs(track_lead.a()[2]) > pT_) {
-    track_back.HitsMdc(track_lead.HitsMdc());
+  //if (back_ && track_lead.a()[2] != 0 && 
+  //    1/fabs(track_lead.a()[2]) > pT_) {
+  //  track_back.HitsMdc(track_lead.HitsMdc());
 
-    if (KalFitTrack::tofall_) {
-      double p_kaon(0), p_proton(0);
-      if (!(kaltrk->getStat(0,3))) {
-	p_kaon = 1 / fabs(kaltrk->getZHelixK()[2]) * 
-	  sqrt(1 + kaltrk->getZHelixK()[4]*kaltrk->getZHelixK()[4]);
-	track_back.p_kaon(p_kaon);
-      } else {
-	p_kaon = 1 / fabs(track_back.a()[2]) *
-	  sqrt(1 + track_back.a()[4]*track_back.a()[4]);
-	track_back.p_kaon(p_kaon);	  
-      }
-      if (!(kaltrk->getStat(0,4))) {
-	p_proton = 1 / fabs(kaltrk->getZHelixP()[2]) * 
-	  sqrt(1 + kaltrk->getZHelixP()[4]*kaltrk->getZHelixP()[4]);
-	track_back.p_proton(p_proton);
-      } else {
-	p_proton = 1 / fabs(track_back.a()[2]) *
-	  sqrt(1 + track_back.a()[4]*track_back.a()[4]);
-	track_back.p_proton(p_proton);
-      }
-    }
+  //  if (KalFitTrack::tofall_) {
+  //    double p_kaon(0), p_proton(0);
+  //    if (!(kaltrk->getStat(0,3))) {
+  //      p_kaon = 1 / fabs(kaltrk->getZHelixK()[2]) * 
+  //        sqrt(1 + kaltrk->getZHelixK()[4]*kaltrk->getZHelixK()[4]);
+  //      track_back.p_kaon(p_kaon);
+  //    } else {
+  //      p_kaon = 1 / fabs(track_back.a()[2]) *
+  //        sqrt(1 + track_back.a()[4]*track_back.a()[4]);
+  //      track_back.p_kaon(p_kaon);	  
+  //    }
+  //    if (!(kaltrk->getStat(0,4))) {
+  //      p_proton = 1 / fabs(kaltrk->getZHelixP()[2]) * 
+  //        sqrt(1 + kaltrk->getZHelixP()[4]*kaltrk->getZHelixP()[4]);
+  //      track_back.p_proton(p_proton);
+  //    } else {
+  //      p_proton = 1 / fabs(track_back.a()[2]) *
+  //        sqrt(1 + track_back.a()[4]*track_back.a()[4]);
+  //      track_back.p_proton(p_proton);
+  //    }
+  //  }
 
-    if (!(i_back_<0)) {
-      //cout<<" *** in smoothing process ***"<<endl;
-      for(int l_mass = 0; l_mass < nmass; l_mass++) {
-	//cout<<" --- in hypothesis "<<l_mass<<" :"<<endl;
-	KalFitTrack track_seed(track_back);
-	track_seed.chgmass(l_mass);     
-	/*cout<<"---------------"<<endl;//wangll
-	  cout<<"smooth track "<<l_mass<<endl;//wangll
-	  cout<<"  pivot :"<<track_seed.pivot()<<endl;//wangll
-	  cout<<"  helix :"<<track_seed.a()<<endl;//wangll
-	 */
-	smoother_anal(track_seed, -way); 
-	// if( usage_ == 1) smoother_calib(track_seed, -way);
-	//cout<<"fillTds_back 1"<<endl;
-	// fill TDS  for backward filter :
-	fillTds_back(track_seed, kaltrk, TrasanTRK, l_mass, segcol, 1);
-	//cout<<"nHits: "<<kaltrk->getVecHelixSegs().size()<<endl;
-      }
-    } else {
-      smoother_anal(track_back, -way);
-      fillTds_back(track_back, kaltrk, TrasanTRK, lead_, segcol, 1);
-    }
-  }
+  //yzhang close smoother 2014-06-30 
+  //if (!(i_back_<0)) {
+  //  //cout<<" *** in smoothing process ***"<<endl;
+  //  for(int l_mass = 0; l_mass < nmass; l_mass++) {
+  //    //cout<<" --- in hypothesis "<<l_mass<<" :"<<endl;
+  //    KalFitTrack track_seed(track_back);
+  //    track_seed.chgmass(l_mass);     
+  //    /*cout<<"---------------"<<endl;//wangll
+  //      cout<<"smooth track "<<l_mass<<endl;//wangll
+  //      cout<<"  pivot :"<<track_seed.pivot()<<endl;//wangll
+  //      cout<<"  helix :"<<track_seed.a()<<endl;//wangll
+  //     */
+  //    smoother_anal(track_seed, -way); 
+  //    // if( usage_ == 1) smoother_calib(track_seed, -way);
+  //    //cout<<"fillTds_back 1"<<endl;
+  //    // fill TDS  for backward filter :
+  //    fillTds_back(track_seed, kaltrk, TrasanTRK, l_mass, segcol, 1);
+  //    //cout<<"nHits: "<<kaltrk->getVecHelixSegs().size()<<endl;
+  //  }
+  //} else {
+  //  smoother_anal(track_back, -way);
+  //  fillTds_back(track_back, kaltrk, TrasanTRK, lead_, segcol, 1);
+  //}
+  //}
   /*
   // Take care of the pointers (use lead. hyp results by default)
-  for(int pid = 0; pid < nmass;
-  pid++) {
+  for(int pid = 0; pid < nmass; pid++) {
   if (pid == lead_) continue;
   if (kaltrk->getStat(1,pid)) 
   sameas(kaltrk, pid, lead_);
@@ -3502,20 +2482,26 @@ void KalFitAlg::complete_track(MdcRec_trk& TrasanTRK,
    */
 
   //check: before register into TDS
-
-  log << MSG::DEBUG << "registered MDC Kalmantrack:"
-    << "Track Id: " << kaltrk->getTrackId()
-    << " Mass of the fit: "<< kaltrk->getMass(2)<< endreq
-    << "Length of the track: "<< kaltrk->getLength(2)
-    << "  Tof of the track: "<< kaltrk->getTof(2) << endreq
-    << "Chisq of the fit: "<< kaltrk->getChisq(0,2)
-    <<"  "<< kaltrk->getChisq(1,2) << endreq
-    << "Ndf of the fit: "<< kaltrk->getNdf(0,2)
-    <<"  "<< kaltrk->getNdf(1,2) << endreq
-    << "Helix " << kaltrk->getZHelix()[2]
-    <<endreq;
+  if(debug_>0){
+    cout<< "registered MDC Kalmantrack:"<<__LINE__
+      << " Track Id: " << kaltrk->getTrackId()
+      << " Mass of the fit: "<< kaltrk->getMass(0)
+      << " Length of the track: "<< kaltrk->getLength(0)
+      << " Tof of the track: "<< kaltrk->getTof(0)
+      << " Chisq of the fit: "<< kaltrk->getChisq(0,0)
+      << " "<< kaltrk->getChisq(1,0)
+      << " Ndf of the fit: "<< kaltrk->getNdf(0,0)
+      << " "<< kaltrk->getNdf(1,0)<<endl;
+    HepVector zHelix = kaltrk->getZHelixE();
+    HepVector fHelix = kaltrk->getFHelixE();
+    cout << "zHelix " << zHelix << "fHelix " << fHelix<<endl;
+  }
 
   kalcol->push_back(kaltrk);
+  if(debug_>0){
+    std::cout<<__FILE__<<"   "<<__LINE__<<" printRecMdcKalTrackCol  "<<std::endl;
+    m_mdcPrintSvc->printRecMdcKalTrackCol();
+  }
   track_lead.HitsMdc().clear();
 }
 

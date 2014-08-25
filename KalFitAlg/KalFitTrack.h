@@ -48,6 +48,7 @@ class KalFitTrack : public Helix
 	double PathL_[43];
 	double pathSM_;
 	double fiTerm_;
+	double fltLenTerm_;
 	double tof2_;
 
 	CLHEP::Hep3Vector mom_[43];
@@ -121,8 +122,6 @@ public:
 
 	double update_hits(KalFitHitMdc& HitMdc, int inext, CLHEP::Hep3Vector& meas, int way, double& dchi2, double& dtrack, double& dtracknew, double& dtdc, int csmflag);
 
-	double update_hits(KalFitHelixSeg& HelixSeg, int inext, CLHEP::Hep3Vector& meas, int way, double& dchi2, int csmflag);
-	double update_hits_csmalign(KalFitHelixSeg& HelixSeg, int inext, CLHEP::Hep3Vector& meas, int way, double& dchi2,int csmflag );
 	double chi2_next(Helix& H, KalFitHitMdc & HitMdc, int csmflag);
 	double chi2_next(Helix& H, KalFitHitMdc & HitMdc);
 
@@ -162,6 +161,7 @@ public:
 	double getTofSM(void) { return tof2_;}
 
 	void fiTerm(double fi);
+	void fltLenTerm(double fltLen);
 	double getFiTerm(void) { return fiTerm_;}
 
 	/// Update the tof estimation
@@ -352,6 +352,7 @@ public:
 
 private:
 	int myLayerUsed[43];
+	double g_lastdp;//yzhang debug 2014-07-11
 
 
 };

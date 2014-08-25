@@ -25,6 +25,7 @@ use MdcCalibFunSvc MdcCalibFunSvc-* Mdc
 use MagneticField   MagneticField-*
 use PartPropSvc  *  
 use VertexFit    VertexFit-*   Analysis 
+use MdcPrintSvc   	MdcPrintSvc-* Mdc/MdcCheckUtil
 
 
 include_dirs "$(KALFITALGROOT)"

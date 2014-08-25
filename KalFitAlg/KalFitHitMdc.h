@@ -35,11 +35,13 @@ public:
   const KalFitWire & wire(void) const { return *wire_; }
   RecMdcHit* rechitptr(void) { return rechitptr_;}
   int id(void) const { return id_;}
+  double pTruth(void) const { return pTruth_;}
 
   /// Modifier :
   void LR(int LR) { LR_ = LR;}
   void chi2(double chi2) { chi2_ = chi2;}
   void chi2_back(double chi2) { chi2_back_ = chi2;}
+  void pTruth(double pTruth) { pTruth_ = pTruth;}
 
   int isolated(void);
 
@@ -48,6 +50,7 @@ public:
   double tdc_;
   double dist_[2];
   double erdist_[2];
+  double pTruth_;//yzhang add 2014-07-10 for debug
   KalFitWire* wire_;
   RecMdcHit* rechitptr_;
   double chi2_, chi2_back_;
