@@ -61,6 +61,7 @@ double KalFitTrack::getDriftTime(KalFitHitMdc& hitmdc , double toftime) const
 
 	double drifttime = rawtime - eventt0 - toftime - timewalk - timeoffset - tp;
 
+	  //std::cout<<"eventt0 "<<eventt0<<" toftime "<<toftime<<" timewalk "<<timewalk<<" timeoffset "<<timeoffset<<" tp "<<tp<<" drifttime "<<drifttime<<" rechit driftT "<<hitmdc.rechitptr()->getDriftT()<<std::endl;
 	if(debug_ == 4 ) {
 	  //std::cout<<"eventt0 "<<eventt0<<" toftime "<<toftime<<" timewalk "<<timewalk<<" timeoffset "<<timeoffset<<" tp "<<tp<<" drifttime "<<drifttime<<" rechit driftT "<<hitmdc.rechitptr()->getDriftT()<<std::endl;
 	}

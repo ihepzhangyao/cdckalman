@@ -17,7 +17,7 @@ using namespace std;
 
 KalFitMaterial::KalFitMaterial(double z, double a, double i,
 			   double rho, double x0)
-  : x0_(x0), z_(z)  // rho is the density, z is the atomic number, a is the weight
+  : x0_(x0), z_(z),a_(a),rho_(rho),i_(i)  // rho is the density, z is the atomic number, a is the weight
                     // i is mean excitation potention, x0 is the radiation length
 {
   rza_ = rho * z / a;
@@ -114,4 +114,8 @@ double KalFitMaterial::del_E(double mass, double path,
   // Return sigma in GeV !!
   return sqrt(sigma_2)*0.001;
 
+}
+
+void KalFitMaterial::dump() const{
+  cout<<" KalFitMaterial dump Z "<<z_<<" A "<< a_ << " i "<<i_<<" rho "<<rho_<<" x0 "<<x0_<<" rza_ "<<rza_<<" rsq "<<isq_<<endl;
 }

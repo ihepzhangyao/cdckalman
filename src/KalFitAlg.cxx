@@ -1084,7 +1084,7 @@ void KalFitAlg::fillTds(MdcRec_trk& TrasanTRK, KalFitTrack& track,
       track.Ea()[2][2] > 0 && track.Ea()[3][3] > 0 && 
       track.Ea()[4][4] > 0 && iqual) {
 
-    cout<<__FILE__<<" "<<__LINE__<<" run "<<runNo<<" evt "<<eventNo <<" hypo "<<l_mass<<" fit success nHitKal="<< track.nchits() <<" nHitMdc "<<TrasanTRK.nhits <<" nHitDiff "<<TrasanTRK.nhits-track.nchits()<<" fp "<<track.momentum().mag()<<" pivot "<<track.pivot()<<endl;//yzhang debug
+    if(debug_==4) cout<<__FILE__<<" "<<__LINE__<<" run "<<runNo<<" evt "<<eventNo <<" hypo "<<l_mass<<" fit success nHitKal="<< track.nchits() <<" nHitMdc "<<TrasanTRK.nhits <<" nHitDiff "<<TrasanTRK.nhits-track.nchits()<<" fp "<<track.momentum().mag()<<" mom "<<track.momentum()<<" pivot "<<track.pivot()<<endl;//yzhang debug
     if(debug_ == 4) cout<<"fillTds>.....going on "<<endl;
     trk->setStat(0,0,l_mass);
     if(debug_ >0) cout<<"evt "<<eventNo<<" mass[" <<l_mass<<"] filter success  "<<std::endl;
@@ -1432,7 +1432,7 @@ void KalFitAlg::filter_fwd_anal(KalFitTrack& track, int l_mass, int way, HepSymM
     if(debug_ == 4) {
       cout<<endl<<"===filter hit No."<<i<<" ("<<layerf<<","<<Wire.localId()<<")"<<endl;
       //cout<<"layerf,cellid wireid = "<<layerf<<", "<<Wire.localId()<<" "<<wireid<<endl;
-      cout<<"helix:"<<track.a()<<", Ea:"<<track.Ea()<<endl;
+      cout<<"helix: mom "<<track.momentum()<<" p "<<track.momentum().mag()<<track.a()<<", Ea:"<<track.Ea()<<endl;
       std::cout<<" work.pivot: (fwd + bck) * .5: "<<(fwd + bck)*.5<<std::endl;
       std::cout<<" track.x(0): "<<track.x(0) <<" track.dz "<<track.dz()<<" tanl "<<track.tanl()<<" curv "<<track.curv()<<" pivot "<<track.pivot()<<std::endl;
       std::cout<<" work.x(0): "<<work.x(0)<<" work.dz "<<work.dz()<<" tanl "<<work.tanl()<<" curv "<<work.curv()<<" pivot "<<work.pivot()<<std::endl;
@@ -1524,7 +1524,7 @@ void KalFitAlg::filter_fwd_anal(KalFitTrack& track, int l_mass, int way, HepSymM
       double dchi2 = -1.0;
 
       if(debug_ == 4) {
-	cout<<"inext "<<inext<<",meas "<<meas<<",way "<<way<<",dch2 "<<dchi2<<",dtrack "<<dtrack<<",dtracknew "<<dtracknew<<",dtdc "<<dtdc<<endl;
+	cout<<"inext "<<inext<<" track.momentum(0) "<<track.momentum(0)<<",meas "<<meas<<",way "<<way<<",dch2 "<<dchi2<<",dtrack "<<dtrack<<",dtracknew "<<dtracknew<<",dtdc "<<dtdc<<endl;
       }
 
       if(inext==1) track.fltLenTerm(HitMdc.rechitptr()->getFltLen());//cm//yzhang add 2014-07-01 
@@ -1895,7 +1895,7 @@ void KalFitAlg::kalman_fitting_anal(void) {
     if(debug_ == 4) {
       std::cout<<" hits after sorting: nhits="<<track_lead.HitsMdc().size()<<std::endl;    
       for(std::vector<KalFitHitMdc>::iterator it_hit = track_lead.HitsMdc().begin(); it_hit!=track_lead.HitsMdc().end(); it_hit++){
-	std::cout<<"("<<it_hit->id()<<": "<<it_hit->wire().layer().layerId()<<","<<it_hit->wire().localId()<<";"<<it_hit->rechitptr()->getFlagLR()<<") rec ddr "<<it_hit->rechitptr()->getDriftDistRight()<<" rec dt "<<it_hit->rechitptr()->getDriftT()<<endl;
+	std::cout<<"("<<it_hit->id()<<": "<<it_hit->wire().layer().layerId()<<","<<it_hit->wire().localId()<<";"<<it_hit->rechitptr()->getFlagLR()<<") rec ddr "<<it_hit->rechitptr()->getDriftDistRight()<<" rec dt "<<it_hit->rechitptr()->getDriftT()<<" stat "<<it_hit->rechitptr()->getStat()<<endl;
 	//std::cout<<" the id of this hits after sorting in PatRec is "<<it_hit->id()<<std::endl;    
 	//std::cout<<" the layerid of the hit is "<<it_hit->wire().layer().layerId()<<std::endl; 
 	//std::cout<<" the cellid of this wire is "<<it_hit->wire().localId()<<std::endl;

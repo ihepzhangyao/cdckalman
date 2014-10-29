@@ -508,6 +508,7 @@ double KalFitTrack::smoother_Mdc(KalFitHitMdc& HitMdc, Hep3Vector& meas, KalFitH
   double x[3] ={pivot().x(), pivot().y(), pivot().z()};
   double pmom[3] ={momentum().x(), momentum().y(), momentum().z()};
 
+
   double tofest(0);
   double dd(0.);
   //double phi = fmod(phi0() + M_PI4, M_PI2);
@@ -515,6 +516,7 @@ double KalFitTrack::smoother_Mdc(KalFitHitMdc& HitMdc, Hep3Vector& meas, KalFitH
   double csf0 = cos(phi);
   double snf0 = (1. - csf0) * (1. + csf0);
   snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
+  if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<" pivot "<<pivot() <<" pmom "<<momentum()<<" phi "<<phi<<std::endl;
   if(phi > M_PI) snf0 = - snf0;
   //if(phi > M_PI&&debug_==4) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug NOT delete phi > M_PI "<<std::endl;
 
@@ -1955,7 +1957,10 @@ double KalFitTrack::update_hits(KalFitHitMdc & HitMdc, int inext, Hep3Vector& me
   }
   if(phi > M_PI&&debug_) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete  snf0 "<<snf0<<" snf0_new "<<snf0_new<<std::endl;
 
+  if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<" phi0 "<<phi0()<<" phi "<<phi<<" pivot "<<pivot()<<" mom "<<momentum()<<" csf0 "<<csf0<<" snf0 "<<snf0<<std::endl;
   snf0 = snf0_new;//yzhang 2014-06-18 
+
+  if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<" pivot "<<pivot() <<" pmom "<<momentum()<<" phi "<<phi<<std::endl;
   double testFi = -999.;
   double testFltLen = -999.;
   if (Tof_correc_){
@@ -2016,7 +2021,7 @@ double KalFitTrack::update_hits(KalFitHitMdc & HitMdc, int inext, Hep3Vector& me
   v_H[3] =  -meas.z();
   HepMatrix v_HT = v_H.T();
 
-  if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<" v_HT  "<<v_HT<<" v_a "<<v_a<<std::endl;
+  if(debug_==4)std::cout<<__FILE__<<"   "<<__LINE__<<" v_H "<<v_H<<" v_HT  "<<v_HT<<" v_a "<<v_a<<" a "<<a()<<std::endl;
   double estim = (v_HT * v_a)[0];
   dtrack = estim;
   HepVector ea_v_H = ea * v_H;
@@ -2134,68 +2139,83 @@ double KalFitTrack::update_hits(KalFitHitMdc & HitMdc, int inext, Hep3Vector& me
       cout<<"diffR="<<diffR<<endl;
     }
   }
-  // Update Kalman result :
-  double dchi2_loc(0);
-  if (fabs(dchi2R-dchi2L)<10. && inext>0) {
-    KalFitHitMdc & HitMdc_next = HitsMdc_[inext];
-    Helix H_fromR(pivot(), aNewR, eaNewR);
-    double chi2_fromR(chi2_next(H_fromR, HitMdc_next, csmflag));
-    Helix H_fromL(pivot(), aNewL, eaNewL);
-    double chi2_fromL(chi2_next(H_fromL, HitMdc_next, csmflag));
-    //#ifdef YDEBUG
-    if(debug_==4){
-      std::cout << "   chi2_fromL = " << chi2_fromL 
-	<< ", chi2_fromR = " << chi2_fromR << std::endl;
-    }
-    //#endif
-    if (fabs(chi2_fromR-chi2_fromL)<10.){
-      int inext2(-1);
-      if (inext+1<HitsMdc_.size())
-	for( int k=inext+1 ; k < HitsMdc_.size(); k++ )
-	  if (!(HitsMdc_[k].chi2()<0)) {
-	    inext2 = k;
-	    break;
-	  }
-
-      if (inext2 != -1){
-	KalFitHitMdc & HitMdc_next2 = HitsMdc_[inext2];
-	double chi2_fromR2(chi2_next(H_fromR, HitMdc_next2, csmflag));
-	double chi2_fromL2(chi2_next(H_fromL, HitMdc_next2, csmflag));
-	//#ifdef YDEBUG
-	if(debug_==4){
-	  std::cout << "   chi2_fromL2 = " << chi2_fromL2 
-	    << ", chi2_fromR2 = " << chi2_fromR2 << std::endl;
-	}
-	//#endif
-	if (fabs(dchi2R+chi2_fromR+chi2_fromR2-(dchi2L+chi2_fromL+chi2_fromL2))<2) {
-	  if (chi2_fromR2<chi2_fromL2)
-	    dchi2L = DBL_MAX;
-	  else 
-	    dchi2R = DBL_MAX;
-	}
-      } 
-    }
-
-    if (!(dchi2L == DBL_MAX && dchi2R == DBL_MAX)) {
-      if (dchi2R+chi2_fromR < dchi2L+chi2_fromL){
-	dchi2L = DBL_MAX;
-#ifdef YDEBUG
-	std::cout << " choose right..." << std::endl;
-#endif
-      } else {
-	dchi2R = DBL_MAX;
-#ifdef YDEBUG
-	std::cout << " choose left..." << std::endl;
-#endif
-      }
-    }
-  }else{
-    //yzhang add debug
-    if(debug_==4){
-      cout<<" !(fabs(dchi2R-dchi2L)<10. && inext>0) dchi2R="<<dchi2R<<" dchi2L="<<dchi2L<<endl;
-    }
+  if(debug_==4){
+    cout<<"before dchi2R="<<dchi2R<<" dchi2L="<<dchi2L<<endl;
   }
 
+  // Update Kalman result :
+  double dchi2_loc(0);
+
+  //yzhang 2014-10-29 , do not update chi2 with next and next next hit
+  bool UpdateChi2WithNext_ = false;
+  if( UpdateChi2WithNext_ ){
+    if (fabs(dchi2R-dchi2L)<10. && inext>0) {
+      KalFitHitMdc & HitMdc_next = HitsMdc_[inext];
+      Helix H_fromR(pivot(), aNewR, eaNewR);
+      double chi2_fromR(chi2_next(H_fromR, HitMdc_next, csmflag));
+      Helix H_fromL(pivot(), aNewL, eaNewL);
+      double chi2_fromL(chi2_next(H_fromL, HitMdc_next, csmflag));
+      //#ifdef YDEBUG
+      if(debug_==4){
+	std::cout << "   chi2_fromL = " << chi2_fromL 
+	  << ", chi2_fromR = " << chi2_fromR << std::endl;
+      }
+      //#endif
+      if (fabs(chi2_fromR-chi2_fromL)<10.){
+	int inext2(-1);
+	if (inext+1<HitsMdc_.size())
+	  for( int k=inext+1 ; k < HitsMdc_.size(); k++ )
+	    if (!(HitsMdc_[k].chi2()<0)) {
+	      inext2 = k;
+	      break;
+	    }
+
+	if (inext2 != -1){
+	  KalFitHitMdc & HitMdc_next2 = HitsMdc_[inext2];
+	  double chi2_fromR2(chi2_next(H_fromR, HitMdc_next2, csmflag));
+	  double chi2_fromL2(chi2_next(H_fromL, HitMdc_next2, csmflag));
+	  //#ifdef YDEBUG
+	  if(debug_==4){
+	    std::cout << "   chi2_fromL2 = " << chi2_fromL2 
+	      << ", chi2_fromR2 = " << chi2_fromR2 << std::endl;
+	  }
+	  //#endif
+	  if (fabs(dchi2R+chi2_fromR+chi2_fromR2-(dchi2L+chi2_fromL+chi2_fromL2))<2) {
+	    if (chi2_fromR2<chi2_fromL2)
+	      dchi2L = DBL_MAX;
+	    else 
+	      dchi2R = DBL_MAX;
+	  }
+	}
+
+      }
+
+      if (!(dchi2L == DBL_MAX && dchi2R == DBL_MAX)) {
+	if (dchi2R+chi2_fromR < dchi2L+chi2_fromL){
+	  dchi2L = DBL_MAX;
+#ifdef YDEBUG
+	  std::cout << " choose right..." << std::endl;
+#endif
+	} else {
+	  dchi2R = DBL_MAX;
+#ifdef YDEBUG
+	  std::cout << " choose left..." << std::endl;
+#endif
+	}
+
+      }
+    }else{
+      //yzhang add debug
+      if(debug_==4){
+	cout<<" !(fabs(dchi2R-dchi2L)<10. && inext>0) dchi2R="<<dchi2R<<" dchi2L="<<dchi2L<<endl;
+      }
+    }
+  }//end of UpdateChi2WithNext_ 
+
+
+  if(debug_==4){
+    cout<<"after dchi2R="<<dchi2R<<" dchi2L="<<dchi2L<<" dchi2cutf_anal "<<dchi2cutf_anal[layerid]<<endl;
+  }
   if ((0 < dchi2R && dchi2R < dchi2cutf_anal[layerid]) ||
       (0 < dchi2L && dchi2L < dchi2cutf_anal[layerid])) {
 
@@ -2203,7 +2223,7 @@ double KalFitTrack::update_hits(KalFitHitMdc & HitMdc, int inext, Hep3Vector& me
     if (((LR_==0 && dchi2R < dchi2L )|| (LR_==1 && lr == 1)) && 
 	// ((LR_==0 && dchi2R < dchi2L && lr != -1) || (LR_==1 && lr == 1)) && 
 	fabs(aNewR[2]-a()[2]) < 1000. && aNewR[2]) {
-      if(debug_>0)cout << __FILE__<<" "<<__LINE__<<" mass "<<l_mass_<< " arbitrate hit keep hit R ("<<MdcID::layer(HitMdc.rechitptr()->getMdcId())<<","<< MdcID::wire(HitMdc.rechitptr()->getMdcId())<<")"<<" MdcHit.lr="<<lr<<" rec.lr="<<lrFromRec<<" dchi2__ "<<dchi2R<<endl;
+      if(debug_>0)cout << __FILE__<<" "<<__LINE__<<" mass "<<l_mass_<< " arbitrate hit keep hit R ("<<MdcID::layer(HitMdc.rechitptr()->getMdcId())<<","<< MdcID::wire(HitMdc.rechitptr()->getMdcId())<<","<<HitMdc.rechitptr()->getStat()<<")"<<" MdcHit.lr="<<lr<<" rec.lr="<<lrFromRec<<" dchi2__ "<<dchi2R<<endl;
       if (nchits_ < (unsigned) nmdc_hit2_ || dchi2R < dchi2cutf_anal[layerid]){
 	nchits_++;
 	if (flag_ster) nster_++;
@@ -2221,7 +2241,7 @@ double KalFitTrack::update_hits(KalFitHitMdc & HitMdc, int inext, Hep3Vector& me
 	// else if ((LR_==0 && dchi2L <= dchi2R && lr != 1) || 
 	//(LR_==1 && lr == -1)) && 
 	fabs(aNewL[2]-a()[2]) < 1000. && aNewL[2]){
-      if(debug_>0)cout << __FILE__<<" "<<__LINE__<<" mass "<<l_mass_<< " arbitrate hit keep hit L ("<<MdcID::layer(HitMdc.rechitptr()->getMdcId())<<","<< MdcID::wire(HitMdc.rechitptr()->getMdcId())<<")"<<" MdcHit.lr="<<lr<<" rec.lr="<<lrFromRec<<" dchi2__ "<<dchi2L<<endl;
+      if(debug_>0)cout << __FILE__<<" "<<__LINE__<<" mass "<<l_mass_<< " arbitrate hit keep hit L ("<<MdcID::layer(HitMdc.rechitptr()->getMdcId())<<","<< MdcID::wire(HitMdc.rechitptr()->getMdcId())<<","<<HitMdc.rechitptr()->getStat()<<")"<<" MdcHit.lr="<<lr<<" rec.lr="<<lrFromRec<<" dchi2__ "<<dchi2L<<endl;
       if (nchits_ < (unsigned) nmdc_hit2_ || dchi2L < dchi2cutf_anal[layerid]){
 	nchits_++;
 	if (flag_ster) nster_++;
@@ -2236,7 +2256,7 @@ double KalFitTrack::update_hits(KalFitHitMdc & HitMdc, int inext, Hep3Vector& me
       }
     }
   }else{
-    if(debug_>0) cout<<__FILE__<<" "<<__LINE__<<" mass "<<l_mass_<<" arbitrate hit ("<< MdcID::layer(HitMdc.rechitptr()->getMdcId())<<","<< MdcID::wire(HitMdc.rechitptr()->getMdcId())<<") drop hit by chi2 cut. dchi2R "<<dchi2R<<" dchi2L "<<dchi2L<<endl; 
+    if(debug_>0) cout<<__FILE__<<" "<<__LINE__<<" mass "<<l_mass_<<" arbitrate hit ("<< MdcID::layer(HitMdc.rechitptr()->getMdcId())<<","<< MdcID::wire(HitMdc.rechitptr()->getMdcId())<<","<<HitMdc.rechitptr()->getStat()<<") drop hit by chi2 cut. dchi2R "<<dchi2R<<" dchi2L "<<dchi2L<<endl; 
     //yzhang add debug
     if(debug_ == 4) {
       cout<<"NOT (0 < dchi2R && dchi2R < dchi2cutf_anal[layerid]) || (0 < dchi2L && dchi2L < dchi2cutf_anal[layerid])"<<endl;
@@ -2490,7 +2510,7 @@ double KalFitTrack::chi2_next(Helix& H, KalFitHitMdc & HitMdc, int csmflag){
   snf0 = sqrt((snf0 > 0.) ? snf0 : 0.);
   if(phi > M_PI) snf0 = - snf0;
   //if(phi > M_PI&&debug_) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete   "<<std::endl;
-  if(phi > M_PI && debug_) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete  snf0 "<<snf0<<" snf0_new "<<sin(phi)<<std::endl;
+  //if(phi > M_PI && debug_) std::cout<<__FILE__<<"   "<<__LINE__<<" yzhang debug phi > M_PI NOT delete  snf0 "<<snf0<<" snf0_new "<<sin(phi)<<std::endl;
 
   snf0 = sin(phi);//yzhang 2014-06-18 
 

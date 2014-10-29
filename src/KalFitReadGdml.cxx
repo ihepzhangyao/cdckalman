@@ -311,11 +311,16 @@ void KalFitAlg::setBesFromGdml(void){
 
 	if(testCDC>0) {
 	  /// CDC inner wall by wuchen 2013-06-23
-	  radius = 50.16; // cm
-	  thick  = 0.04; // cm
+	  //radius = 50.16; // cm
+	  //thick  = 0.04; // cm
+	  radius = 50.1; // cm
+	  thick  = 0.1; // cm
 	  length = 150; // cm
 	  z0     = 0.0; // cm
 	  std::cout<<"CDC inner wall: "<<" radius: "<<radius<<" thick:"<<thick<<" outerRadius:"<<radius+thick<<" length: "<<length<<std::endl;
+	  //KalFitMaterial FitInnerwallFilm1Material(6.56,13.13,83.45,1.57,253.84/10.);//yzhang 2014-10-13 
+	  //KalFitCylinder innerWallCDC(&FitInnerwallFilm1Material, radius, thick, length , z0);
+	  _BesKalmanFitMaterials[1].dump();
 	  KalFitCylinder innerWallCDC(&_BesKalmanFitMaterials[1], radius, thick, length , z0);
 	  _BesKalmanFitWalls.clear();
 	  _BesKalmanFitWalls.push_back(innerWallCDC);

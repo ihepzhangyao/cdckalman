@@ -21,6 +21,9 @@ class KalFitMaterial {
   double isq_;  // mean excitation potential ** 2
   double x0_;   // radiation length
   double z_;   
+  double rho_;   
+  double a_;   
+  double i_;   
 
 public:
   /// Constructor
@@ -36,6 +39,8 @@ public:
 
   /// Calculate the straggling of energy loss
   double del_E(double mass, double path, double p) const;
+
+  void dump() const;//yzhang 2014-10-13 
 
   /// Extractor
   double X0(void) const { return x0_; }
